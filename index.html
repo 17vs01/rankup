@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>RANKUP — 두뇌 랭크전</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 홈 화면 -->
+  <section id="screen-home" class="screen active">
+    <header class="home-header">
+      <div class="logo">RANK<span>UP</span></div>
+      <div class="streak" id="streak-badge"></div>
+    </header>
+    <div id="decay-warning" class="decay-warning hidden"></div>
+    <div class="cards-head">
+      <span id="cards-count"></span>
+      <span id="cards-hint"></span>
+    </div>
+    <div class="cards-wrap">
+      <div class="cards" id="discipline-cards"></div>
+      <div class="cards-fade" id="cards-fade"></div>
+      <div class="cards-more" id="cards-more">▾ 아래로 더 있어요</div>
+    </div>
+    <button id="btn-quick" class="btn-primary btn-quick">
+      <span class="btn-quick-label">빠른 시작</span>
+      <span class="btn-quick-sub" id="quick-sub"></span>
+    </button>
+    <div class="home-footer" id="total-sessions"></div>
+  </section>
+
+  <!-- 게임 화면 -->
+  <section id="screen-game" class="screen">
+    <header class="game-header">
+      <button id="btn-abort" class="btn-ghost">✕</button>
+      <div class="game-title" id="game-title"></div>
+      <div class="game-timer" id="game-timer"></div>
+    </header>
+    <div class="game-body" id="game-body"></div>
+  </section>
+
+  <!-- 결과 화면 -->
+  <section id="screen-result" class="screen">
+    <div class="result-body" id="result-body"></div>
+  </section>
+</div>
+<script type="module" src="js/main.js"></script>
+<script>
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
