@@ -145,14 +145,17 @@ git push
 
 이제 서비스워커가 전부 캐싱해서 **비행기 모드에서도** 돌아간다. 기록은 폰 localStorage에 남는다.
 
-> 기록이 브라우저 저장소에만 있어서, 브라우저 데이터를 지우면 랭크가 날아간다.
-> 몇 달 쌓을 거라면 JSON 내보내기/가져오기를 붙이는 걸 권한다.
+## 기록 백업
+
+기록은 브라우저 localStorage에만 있다. 브라우저 데이터를 지우면 랭크가 날아가므로 **설정 → 파일로 내보내기**로 가끔 저장해 둔다. 파일 하나면 다른 기기에서도 그대로 되살아난다.
+
+가져오기는 덮어쓰기 전에 **파일 내용을 먼저 보여주고 확인받는다** (종목 수, 누적 판수, 마지막 플레이, 내보낸 시각). 형식이 아닌 파일은 이유를 밝히며 거부한다 — `JSON 형식이 아닙니다` / `RANKUP 백업 파일이 아닙니다` / `'math' 기록이 손상되었습니다`.
 
 ## 구조
 
 ```
-index.html              화면 3개 (홈 / 게임 / 결과)
-css/style.css           다크 테마, 세로 모바일 전용
+index.html              화면 4개 (홈 / 게임 / 결과 / 설정)
+css/style.css           근사 블랙 + 골드 단일 강조, 세로 모바일 전용
 sw.js                   오프라인 캐시
 manifest.webmanifest    PWA 설치 정보
 js/
@@ -160,6 +163,7 @@ js/
   rating.js             티어·LP 계산, 부식 공식
   storage.js            localStorage 저장, 스트릭, 세션 기록
   audio.js              사운드 + 진동 피드백
+  backup.js             기록 내보내기·가져오기 (형식 검증 포함)
   sudoku-core.js        스도쿠 생성기·솔버 (유일해 보장, 1~3ms/판)
   data/vocab.js         어휘 600+ (티어 0~3)
   games/                sudoku · chain · math · vocab · memory · focus

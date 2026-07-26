@@ -1,13 +1,14 @@
 // 레이팅 & 티어 시스템 (ELO식 상대 성과 기반)
 
+// 색은 채도를 낮춘 금속 계열로 통일한다. 원색이 7개 섞이면 목록이 시끄러워진다.
 export const TIERS = [
-  { name: '브론즈',       min: 0,    color: '#b0783c' },
-  { name: '실버',         min: 1100, color: '#b8c4d8' },
-  { name: '골드',         min: 1400, color: '#ffc94d' },
-  { name: '플래티넘',     min: 1700, color: '#4dd8c4' },
-  { name: '다이아',       min: 2000, color: '#5b8cff' },
-  { name: '마스터',       min: 2300, color: '#c45bff' },
-  { name: '그랜드마스터', min: 2600, color: '#ff5d6c' },
+  { name: '브론즈',       min: 0,    color: '#B08258' },
+  { name: '실버',         min: 1100, color: '#A9B2BF' },
+  { name: '골드',         min: 1400, color: '#C9A961' },
+  { name: '플래티넘',     min: 1700, color: '#79BDB4' },
+  { name: '다이아',       min: 2000, color: '#7FA0E8' },
+  { name: '마스터',       min: 2300, color: '#A98BD6' },
+  { name: '그랜드마스터', min: 2600, color: '#D97B7B' },
 ];
 
 export const START_RATING = 1000;

@@ -1,5 +1,5 @@
 // 오프라인 캐시 서비스워커
-const CACHE = 'rankup-v3';
+const CACHE = 'rankup-v4';
 const ASSETS = [
   '.',
   'index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   'js/rating.js',
   'js/storage.js',
   'js/audio.js',
+  'js/backup.js',
   'js/data/vocab.js',
   'js/games/math.js',
   'js/games/vocab.js',

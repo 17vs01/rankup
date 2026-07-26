@@ -1,6 +1,7 @@
 import { loadState, saveState, applyDecay, recordSession } from './storage.js';
 import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.js';
 import { sfx } from './audio.js';
+import { exportState, readBackup, fmtDate } from './backup.js';
 import { mathGame } from './games/math.js';
 import { vocabGame } from './games/vocab.js';
 import { memoryGame } from './games/memory.js';
@@ -60,81 +61,96 @@ function fmtRemain(ms) {
   return `${Math.max(1, Math.floor(ms / 60000))}분`;
 }
 
-// 목록 아래에 더 있는지 표시. 끝까지 내리면 신호를 감춘다.
+const nf = n => n.toLocaleString('ko-KR');
+
+// 아래에 내용이 더 있으면 페이드를 띄운다. 끝까지 내리면 감춘다.
 function updateScrollHint() {
-  const el = $('#discipline-cards');
-  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
-  const noOverflow = el.scrollHeight <= el.clientHeight + 4;
-  const hide = atBottom || noOverflow;
-  $('#cards-fade').classList.toggle('hidden-fade', hide);
-  $('#cards-more').classList.toggle('hidden-fade', hide);
+  const el = $('#home-scroll');
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 6;
+  const noOverflow = el.scrollHeight <= el.clientHeight + 6;
+  $('#scroll-fade').classList.toggle('off', atBottom || noOverflow);
 }
-$('#discipline-cards').addEventListener('scroll', updateScrollHint, { passive: true });
+$('#home-scroll').addEventListener('scroll', updateScrollHint, { passive: true });
 window.addEventListener('resize', updateScrollHint);
 
 function renderHome() {
-  // 부식 적용
   const decayed = applyDecay(state);
-  const $warn = $('#decay-warning');
+  const now = Date.now();
+
+  // ----- 종합: 13종목 평균을 한 줄로 -----
+  const avg = Math.round(GAMES.reduce((a, g) => a + state.disc[g.id].rating, 0) / GAMES.length);
+  const avgTier = tierOf(avg);
+  const nextTier = TIERS[avgTier.idx + 1];
+  $('#ov-tier').textContent = avgTier.name;
+  $('#ov-tier').style.color = avgTier.color;
+  $('#ov-lp').textContent = nf(avg);
+  $('#ov-bar').style.width = (tierProgress(avg) * 100) + '%';
+  $('#ov-bar').style.background = avgTier.color;
+  $('#ov-streak').textContent = state.streak > 0 ? `${state.streak}일 연속` : '';
+  $('#ov-meta').textContent = state.totalSessions === 0
+    ? `${GAMES.length}종목 · 아무거나 한 판 해보세요`
+    : nextTier
+      ? `${GAMES.length}종목 평균 · ${nextTier.name}까지 ${nf(nextTier.min - avg)}`
+      : `${GAMES.length}종목 평균 · 최고 티어`;
+
+  // ----- 부식 알림: 붉은 상자 대신 조용한 한 줄 -----
+  const $notice = $('#notice');
   if (decayed.length > 0) {
-    const names = decayed.map(d => {
-      const g = GAMES.find(g => g.id === d.id);
-      return `${g.name} -${d.loss}`;
-    }).join(', ');
-    $warn.textContent = `⚠️ 방치로 레이팅 부식: ${names}`;
-    $warn.classList.remove('hidden');
+    const names = decayed.map(d => `${GAMES.find(g => g.id === d.id).name} −${d.loss}`).join(', ');
+    $notice.textContent = `쉬는 동안 LP가 줄었어요 · ${names}`;
+    $notice.classList.remove('hidden');
   } else {
-    $warn.classList.add('hidden');
+    $notice.classList.add('hidden');
   }
 
-  // 스트릭
-  $('#streak-badge').textContent = state.streak > 0 ? `🔥 ${state.streak}일` : '';
+  // ----- 이어서 하기: 가장 오래 쉰 종목 -----
+  const urgent = GAMES.slice().sort((a, b) =>
+    (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
+  const ud = state.disc[urgent.id];
+  $('#cta-kicker').textContent = ud.sessions === 0 ? '아직 안 해본 종목' : '가장 오래 쉬었어요';
+  $('#cta-name').textContent = `${urgent.icon}  ${urgent.name}`;
+  $('#btn-quick').onclick = () => startSession(urgent);
 
-  // 카드
-  const $cards = $('#discipline-cards');
-  $cards.innerHTML = '';
-  const now = Date.now();
+  // ----- 목록 -----
+  const played = GAMES.filter(g => state.disc[g.id].sessions > 0).length;
+  $('#list-count').textContent = played < GAMES.length
+    ? `${GAMES.length}개 · ${GAMES.length - played}개 미플레이`
+    : `${GAMES.length}개`;
+
+  const $list = $('#list');
+  $list.innerHTML = '';
   for (const g of GAMES) {
     const d = state.disc[g.id];
     const t = tierOf(d.rating);
-    const prog = tierProgress(d.rating);
     const ttd = timeToDecay(d, now);
-    const decaySoon = d.lastPlayed && ttd < 12 * 3600 * 1000;
+    const decaying = d.lastPlayed && ttd <= 0;
+    const decaySoon = d.lastPlayed && ttd > 0 && ttd < 12 * 3600 * 1000;
 
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="card-icon">${g.icon}</div>
-      <div class="card-info">
-        <div class="card-name">${g.name}</div>
-        <div class="card-sub">${g.desc}</div>
-        <div class="tier-bar"><div class="tier-bar-fill" style="width:${prog * 100}%;background:${t.color}"></div></div>
-      </div>
-      <div class="card-rank">
-        <div class="card-tier" style="color:${t.color}">${t.name}</div>
-        <div class="card-rating">${d.rating} LP</div>
-        ${decaySoon ? `<div class="card-decay">${ttd === 0 ? '부식 중!' : fmtRemain(ttd) + ' 후 부식'}</div>` : ''}
-      </div>
+    // 안 해본 종목만 설명을 보여준다. 해본 뒤엔 군더더기가 된다.
+    const sub = d.sessions === 0 ? g.desc
+      : decaying ? '지금 LP가 줄고 있어요'
+      : decaySoon ? `${fmtRemain(ttd)} 뒤 LP 감소`
+      : `${d.sessions}판 · 최고 ${nf(d.best)}`;
+
+    const row = document.createElement('button');
+    row.className = 'row';
+    row.style.color = t.color;
+    row.innerHTML = `
+      <span class="row-icon">${g.icon}</span>
+      <span class="row-main">
+        <span class="row-name" style="color:var(--text)">${g.name}${d.sessions === 0 ? '<i class="row-new">NEW</i>' : ''}</span>
+        <span class="row-sub${decaying || decaySoon ? ' row-warn' : ''}">${sub}</span>
+      </span>
+      <span class="row-right">
+        <span class="row-tier" style="color:${t.color}">${t.name}</span>
+        <span class="row-lp">${nf(d.rating)}</span>
+      </span>
     `;
-    card.addEventListener('click', () => startSession(g));
-    $cards.appendChild(card);
+    // 행 아래 1px 선의 길이 = 다음 티어까지의 진행도
+    row.style.setProperty('--prog', (tierProgress(d.rating) * 100) + '%');
+    row.addEventListener('click', () => startSession(g));
+    $list.appendChild(row);
   }
-
-  // 목록이 잘려 보이지 않게: 총 개수를 적고, 스크롤 여지가 있으면 알려준다
-  $('#cards-count').textContent = `종목 ${GAMES.length}`;
-  const played = GAMES.filter(g => state.disc[g.id].sessions > 0).length;
-  $('#cards-hint').textContent = played < GAMES.length
-    ? `${GAMES.length - played}개 아직 안 해봄` : '전 종목 플레이';
-
-  // 빠른 시작: 부식 임박/가장 오래 안 한 종목
-  const urgent = GAMES.slice().sort((a, b) => {
-    return (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0);
-  })[0];
-  $('#quick-sub').textContent = `${urgent.icon} ${urgent.name} — 가장 오래 쉬었어요`;
-  $('#btn-quick').onclick = () => startSession(urgent);
-
-  $('#total-sessions').textContent = state.totalSessions > 0
-    ? `누적 ${state.totalSessions}판` : '첫 판을 시작해보세요';
 
   show('#screen-home');
   // 화면을 띄운 뒤에 재야 한다. display:none 상태에서는 높이가 0이라
@@ -261,15 +277,15 @@ function endSession(game, result) {
 
   const $r = $('#result-body');
   $r.innerHTML = `
-    <div class="result-game">${game.icon} ${game.name}</div>
-    <div class="result-score">${result.score}</div>
+    <div class="result-game">${game.name}</div>
+    <div class="result-score">${nf(result.score)}</div>
     <div class="result-detail">${result.detail}</div>
-    ${newRecord ? '<div class="result-newrecord">🏆 자기 최고 기록!</div>' : ''}
-    <div class="result-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta} LP</div>
-    <div class="result-tier" style="color:${afterTier.color}">${afterTier.name} · ${after} LP</div>
-    <div class="tier-bar" style="width:200px"><div class="tier-bar-fill" style="width:${tierProgress(after) * 100}%;background:${afterTier.color}"></div></div>
-    ${tierUp ? `<div class="result-tierup">🎉 ${afterTier.name} 승급!</div>` : ''}
-    ${tierDown ? `<div class="result-tierup" style="color:var(--bad)">📉 ${afterTier.name} 강등…</div>` : ''}
+    ${newRecord ? '<div class="result-newrecord">자기 최고 기록</div>' : ''}
+    <div class="result-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP</div>
+    <div class="result-tier" style="color:${afterTier.color}">${afterTier.name} · ${nf(after)}</div>
+    <div class="result-bar"><i style="width:${tierProgress(after) * 100}%;background:${afterTier.color}"></i></div>
+    ${tierUp ? `<div class="result-tierup" style="color:${afterTier.color}">${afterTier.name} 승급</div>` : ''}
+    ${tierDown ? `<div class="result-tierup" style="color:var(--bad)">${afterTier.name} 강등</div>` : ''}
     <div class="result-buttons">
       <button class="btn-primary" id="btn-again">한 판 더</button>
       <button class="btn-secondary" id="btn-home">홈으로</button>
@@ -293,6 +309,115 @@ $('#btn-abort').addEventListener('click', () => {
 // 홈으로 복귀 시 갱신 (탭 복귀 포함)
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && $('#screen-home').classList.contains('active')) renderHome();
+});
+
+// ---------- 설정 ----------
+function fmtWhen(ms) {
+  if (!ms) return '없음';
+  const d = new Date(ms);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}`;
+}
+
+function renderSettings() {
+  const now = Date.now();
+  const played = GAMES.filter(g => state.disc[g.id].sessions > 0).length;
+  const lastPlayed = Math.max(0, ...GAMES.map(g => state.disc[g.id].lastPlayed || 0));
+  const best = GAMES.slice().sort((a, b) => state.disc[b.id].rating - state.disc[a.id].rating)[0];
+  const rows = [
+    ['누적 판수', `${nf(state.totalSessions)}판`],
+    ['플레이한 종목', `${played} / ${GAMES.length}`],
+    ['연속 기록', state.streak > 0 ? `${state.streak}일` : '없음'],
+    ['가장 높은 종목', `${best.name} · ${nf(state.disc[best.id].rating)}`],
+    ['마지막 플레이', fmtWhen(lastPlayed)],
+  ];
+  $('#stat-rows').innerHTML = rows
+    .map(([k, v]) => `<div class="stat-row"><span>${k}</span><span>${v}</span></div>`).join('');
+  hideBackupUI();
+  show('#screen-settings');
+}
+
+function hideBackupUI() {
+  $('#backup-msg').classList.add('hidden');
+  $('#import-confirm').classList.add('hidden');
+  $('#reset-confirm').classList.add('hidden');
+}
+
+function say(text, kind) {
+  const el = $('#backup-msg');
+  el.textContent = text;
+  el.className = 'msg' + (kind ? ' ' + kind : '');
+  el.classList.remove('hidden');
+}
+
+$('#btn-settings').addEventListener('click', renderSettings);
+$('#btn-settings-back').addEventListener('click', renderHome);
+
+$('#btn-export').addEventListener('click', () => {
+  try {
+    const name = exportState(state);
+    say(`${name} 으로 저장했습니다. 이 파일만 있으면 어느 기기에서든 되살릴 수 있어요.`, 'ok');
+  } catch (e) {
+    say('내보내기에 실패했습니다: ' + e.message, 'err');
+  }
+});
+
+let pendingImport = null;
+$('#btn-import').addEventListener('click', () => $('#file-input').click());
+
+$('#file-input').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';   // 같은 파일을 다시 골라도 change가 뜨도록
+  if (!file) return;
+  hideBackupUI();
+  try {
+    const { state: incoming, summary } = await readBackup(file);
+    pendingImport = incoming;
+    // 덮어쓰기 전에 파일 내용을 먼저 보여준다
+    $('#import-summary').innerHTML = [
+      `종목 ${summary.종목}개`,
+      `누적 ${nf(summary.누적판수)}판`,
+      `연속 ${summary.스트릭}일`,
+      `마지막 플레이 ${fmtDate(summary.마지막플레이)}`,
+      summary.내보낸시각 ? `내보낸 시각 ${fmtDate(summary.내보낸시각)}` : null,
+    ].filter(Boolean).join('<br>');
+    $('#import-confirm').classList.remove('hidden');
+  } catch (err) {
+    pendingImport = null;
+    say(err.message, 'err');
+  }
+});
+
+$('#btn-import-cancel').addEventListener('click', () => {
+  pendingImport = null;
+  $('#import-confirm').classList.add('hidden');
+});
+
+$('#btn-import-apply').addEventListener('click', () => {
+  if (!pendingImport) return;
+  saveState(pendingImport);
+  state = loadState();      // 누락 필드를 채워 다시 읽는다
+  pendingImport = null;
+  $('#import-confirm').classList.add('hidden');
+  renderSettings();
+  say('가져왔습니다.', 'ok');
+});
+
+$('#btn-reset').addEventListener('click', () => {
+  hideBackupUI();
+  $('#reset-summary').innerHTML =
+    `누적 ${nf(state.totalSessions)}판<br>${GAMES.filter(g => state.disc[g.id].sessions > 0).length}개 종목 기록`;
+  $('#reset-confirm').classList.remove('hidden');
+});
+
+$('#btn-reset-cancel').addEventListener('click', () => $('#reset-confirm').classList.add('hidden'));
+
+$('#btn-reset-apply').addEventListener('click', () => {
+  localStorage.removeItem('rankup-state-v1');
+  state = loadState();
+  $('#reset-confirm').classList.add('hidden');
+  renderSettings();
+  say('모든 기록을 지웠습니다.', 'ok');
 });
 
 renderHome();
