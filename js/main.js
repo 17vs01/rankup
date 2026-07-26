@@ -311,6 +311,29 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && $('#screen-home').classList.contains('active')) renderHome();
 });
 
+// ---------- 화면 테마 ----------
+const THEMES = ['onyx', 'graphite', 'linen'];
+// 주소창 색까지 맞춰야 폰에서 앱처럼 보인다
+const THEME_BG = { onyx: '#0A0A0C', graphite: '#1D1E21', linen: '#F6F4F0' };
+
+function applyTheme(name) {
+  const t = THEMES.includes(name) ? name : 'onyx';
+  document.documentElement.setAttribute('data-theme', t);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', THEME_BG[t]);
+  document.querySelectorAll('.theme').forEach(b =>
+    b.classList.toggle('on', b.dataset.theme === t));
+}
+
+$('#themes').addEventListener('click', e => {
+  const b = e.target.closest('.theme');
+  if (!b) return;
+  state.theme = b.dataset.theme;
+  saveState(state);
+  applyTheme(state.theme);
+  sfx.tick();
+});
+
 // ---------- 설정 ----------
 function fmtWhen(ms) {
   if (!ms) return '없음';
@@ -397,6 +420,7 @@ $('#btn-import-apply').addEventListener('click', () => {
   if (!pendingImport) return;
   saveState(pendingImport);
   state = loadState();      // 누락 필드를 채워 다시 읽는다
+  applyTheme(state.theme);
   pendingImport = null;
   $('#import-confirm').classList.add('hidden');
   renderSettings();
@@ -413,11 +437,15 @@ $('#btn-reset').addEventListener('click', () => {
 $('#btn-reset-cancel').addEventListener('click', () => $('#reset-confirm').classList.add('hidden'));
 
 $('#btn-reset-apply').addEventListener('click', () => {
+  const keepTheme = state.theme;
   localStorage.removeItem('rankup-state-v1');
   state = loadState();
+  state.theme = keepTheme;   // 화면 설정까지 초기화할 이유는 없다
+  saveState(state);
   $('#reset-confirm').classList.add('hidden');
   renderSettings();
   say('모든 기록을 지웠습니다.', 'ok');
 });
 
+applyTheme(state.theme);
 renderHome();

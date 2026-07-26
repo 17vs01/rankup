@@ -27,6 +27,7 @@ function freshState() {
     disc,
     vocab: {},          // wordIdx -> { box, due } 라이트너 박스
     sudoku: null,       // 진행 중인 스도쿠 판 (이어하기)
+    theme: 'onyx',      // 화면 테마
     totalSessions: 0,
     streak: 0,
     lastStreakDay: '',
@@ -41,6 +42,7 @@ export function loadState() {
   for (const id of DISC_IDS) if (!s.disc[id]) s.disc[id] = freshDisc();
   if (!s.vocab) s.vocab = {};
   if (s.sudoku === undefined) s.sudoku = null;
+  if (!s.theme) s.theme = 'onyx';
   return s;
 }
 
