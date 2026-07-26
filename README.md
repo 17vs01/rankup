@@ -1,6 +1,10 @@
 # RANKUP — 두뇌 랭크전
 
+**▶ https://17vs01.github.io/rankup/**
+
 심심할 때 쇼츠 대신 여는 앱. 열면 바로 할 게 있고, **한 판 60초**, 끄고 나면 실력이 숫자로 남는다.
+
+폰 브라우저로 위 주소를 열고 **홈 화면에 추가**하면 앱처럼 쓸 수 있다. 오프라인에서도 돌아간다.
 
 ## 왜 이렇게 만들었나
 
@@ -120,16 +124,22 @@ npx -y http-server C:\projects2\enjoy -p 8734 -c-1
 > Android Chrome의 "앱 설치"도 안 뜬다. 게임과 랭크 기록 자체는 정상 동작한다.
 > 포트가 이미 쓰이는 중이면 `EADDRINUSE` 에러가 난다 — 서버가 이미 떠 있다는 뜻이니 그냥 접속하면 된다.
 
-### 방법 B — 제대로 쓰기 (HTTPS, 권장)
+### 방법 B — 배포본 쓰기 (권장)
 
-빌드 과정도 백엔드도 없으니 폴더를 그대로 정적 호스팅에 올리면 끝이다.
+이미 GitHub Pages에 올라가 있다. 폰에서 그냥 열면 된다.
 
-- **Netlify Drop** — [app.netlify.com/drop](https://app.netlify.com/drop) 에 `enjoy` 폴더를 드래그. 계정도 필요 없다
-- **Vercel** — `npx vercel --prod`
-- **GitHub Pages** — 저장소에 올리고 Settings → Pages에서 브랜치 지정
-- **Cloudflare Pages** — 폴더 업로드
+**https://17vs01.github.io/rankup/**
 
-HTTPS 주소가 나오면 폰에서 열고 **홈 화면에 추가**:
+고친 뒤 다시 올리려면 푸시만 하면 된다 (빌드 과정 없음):
+
+```bash
+git push
+```
+
+> 배포 후 캐시된 옛 버전이 보이면 `sw.js`의 `CACHE` 값을 올려서 푸시한다.
+> 서비스워커는 네트워크 우선이라 보통은 그냥 갱신된다.
+
+폰에서 열고 **홈 화면에 추가**:
 - iPhone(Safari): 공유 버튼 → `홈 화면에 추가`
 - Android(Chrome): ⋮ → `앱 설치`
 
