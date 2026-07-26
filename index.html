@@ -143,7 +143,11 @@
 <script type="module" src="js/main.js"></script>
 <script>
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('sw.js');
+  navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(reg => {
+    // 캐시가 비어 있으면 채워달라고 요청한다. 스크립트가 안 바뀌면 install이
+    // 다시 돌지 않아서, 캐시가 한번 밀려나면 오프라인이 영영 안 되기 때문.
+    if (reg.active) reg.active.postMessage({ type: 'ensure-cache' });
+  }).catch(() => { /* 오프라인이 안 될 뿐, 앱은 그대로 동작한다 */ });
 }
 </script>
 </body>
