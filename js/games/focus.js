@@ -17,6 +17,7 @@ export const focusGame = {
   run(ctx) {
     let totalPts = 0;
     const parts = [];
+    let bestReaction = null;   // 이번 판 최고 반응속도 (ms)
 
     // ---------- 1단계: 반응속도 ----------
     function stageReaction() {
@@ -74,6 +75,9 @@ export const focusGame = {
           const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
           const pts = Math.max(0, Math.round((520 - avg) / 15));
           totalPts += pts;
+          // 부정출발(600 고정값)은 기록에서 제외
+          const clean = times.filter(t => t !== 600);
+          if (clean.length) bestReaction = Math.min(...clean);
           parts.push(`반응 ${avg}ms`);
           stageStroop();
           return;
@@ -197,6 +201,8 @@ export const focusGame = {
         score: totalPts,
         perf,
         detail: parts.join(' · '),
+        time: bestReaction !== null
+          ? { key: 'time_reaction', value: bestReaction, unit: 'ms', label: '최고 반응속도' } : null,
       });
     }
 

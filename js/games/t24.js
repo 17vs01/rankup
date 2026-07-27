@@ -51,6 +51,7 @@ export const t24Game = {
   run(ctx) {
     const L = Math.max(0, (ctx.rating - 800) / 250);
     let round = 0, solved = 0, totalSec = 0;
+    const solveTimes = [];   // 라운드별 해결 시간 (최단 기록용)
     let tiles = [], target = 0, selIdx = -1, op = null, startAt = 0;
     const history = [];   // 되돌리기용 타일 스냅샷
 
@@ -131,9 +132,11 @@ export const t24Game = {
         const ok = Math.abs(tiles[0] - target) < EPS;
         if (ok) {
           solved++;
-          totalSec += (performance.now() - startAt) / 1000;
+          const took = (performance.now() - startAt) / 1000;
+          totalSec += took;
+          solveTimes.push(took);
           sfx.good();
-          $fb.textContent = `성공! ${fmt(tiles[0])} = ${target}`;
+          $fb.textContent = `성공! ${fmt(tiles[0])} = ${target}  (${took.toFixed(1)}초)`;
           $fb.className = 't24-fb good';
           ctx.delay(newRound, 1100);
         } else {
@@ -170,10 +173,13 @@ export const t24Game = {
 
     function end() {
       const avg = solved > 0 ? (totalSec / solved).toFixed(0) : '–';
+      const fastest = solveTimes.length ? Math.min(...solveTimes) : null;
       ctx.finish({
         score: solved,
         perf: solved / 3.2,
         detail: `${solved}/${ROUNDS} 성공${solved ? ` · 평균 ${avg}초` : ''}`,
+        // 한 문제를 가장 빨리 푼 시간
+        time: fastest !== null ? { key: 'time_one', value: fastest, unit: 'sec', label: '한 문제 최단' } : null,
       });
     }
 

@@ -248,10 +248,13 @@ export const chainGame = {
     function end() {
       if (finished) return;
       finished = true;
+      const sec = readSec();
       ctx.finish({
         score: totalChain,
         perf: cleared / EXPECTED_CLEAR,
-        detail: `${cleared}/${ROUNDS}판 돌파 · ${totalChain}칸 연쇄 · ${readSec()}초`,
+        detail: `${cleared}/${ROUNDS}판 돌파 · ${totalChain}칸 연쇄 · ${sec}초`,
+        // 전판 돌파했을 때만 시간 기록 — 건너뛰기로 빨리 끝낸 판은 기록이 아니다
+        time: cleared === ROUNDS ? { key: 'time_full', value: sec, unit: 'sec', label: '4판 돌파' } : null,
       });
     }
 

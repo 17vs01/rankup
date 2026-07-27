@@ -286,6 +286,8 @@ export const sudokuGame = {
         detail: solved
           ? `${level.name} 완성 · ${mm}:${ss} · 실수 ${mistakes}`
           : `${level.name} 실패 · 실수 ${MAX_MISTAKES}회`,
+        // 난이도별 최단 완주 기록 (쉬움 기록과 극한 기록은 다른 기록)
+        time: solved ? { key: 'time_' + level.name, value: sec, unit: 'sec', label: level.name + ' 완주' } : null,
       });
     }
 

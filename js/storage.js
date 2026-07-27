@@ -16,7 +16,8 @@ function freshDisc() {
     lastPlayed: 0,
     lastDecay: 0,
     sessions: 0,
-    best: 0, // 종목별 최고 점수
+    best: 0,      // 종목별 최고 점수
+    records: {},  // 최단 시간 기록. key -> 값(초 또는 ms), 낮을수록 좋음
   };
 }
 
@@ -40,7 +41,10 @@ export function loadState() {
   let s;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch { s = null; }
   if (!s || !s.disc) s = freshState();
-  for (const id of DISC_IDS) if (!s.disc[id]) s.disc[id] = freshDisc();
+  for (const id of DISC_IDS) {
+    if (!s.disc[id]) s.disc[id] = freshDisc();
+    if (!s.disc[id].records) s.disc[id].records = {};   // 예전 저장본 보강
+  }
   if (!s.vocab) s.vocab = {};
   if (s.sudoku === undefined) s.sudoku = null;
   if (!s.theme) s.theme = 'onyx';

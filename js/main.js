@@ -64,6 +64,26 @@ function fmtRemain(ms) {
 
 const nf = n => n.toLocaleString('ko-KR');
 
+// 시간 기록을 가진 종목과 표시 이름
+const TIME_RECORDS = {
+  sudoku:  { unit: 'sec', title: '난이도별 최단 완주', order: ['쉬움', '보통', '어려움', '전문가', '마스터', '극한'].map(n => ['time_' + n, n]) },
+  chain:   { unit: 'sec', title: '최단 기록', order: [['time_full', '4판 돌파']] },
+  t24:     { unit: 'sec', title: '최단 기록', order: [['time_one', '한 문제']] },
+  focus:   { unit: 'ms',  title: '최고 기록', order: [['time_reaction', '반응속도']] },
+};
+
+// 홈 목록 한 줄에 넣을 대표 기록 (가장 어려운 난이도 우선)
+function bestRecordOf(gameId) {
+  const spec = TIME_RECORDS[gameId];
+  if (!spec) return null;
+  const recs = state.disc[gameId].records || {};
+  for (let i = spec.order.length - 1; i >= 0; i--) {
+    const [key, label] = spec.order[i];
+    if (recs[key] !== undefined) return `${label} ${fmtDur(recs[key], spec.unit)}`;
+  }
+  return null;
+}
+
 // 아래에 내용이 더 있으면 페이드를 띄운다. 끝까지 내리면 감춘다.
 function updateScrollHint() {
   const el = $('#home-scroll');
@@ -128,9 +148,12 @@ function renderHome() {
     const decaySoon = d.lastPlayed && ttd > 0 && ttd < 12 * 3600 * 1000;
 
     // 안 해본 종목만 설명을 보여준다. 해본 뒤엔 군더더기가 된다.
+    // 시간 기록이 있는 종목은 최고 기록을 보여준다 (더 자랑스러운 숫자)
+    const rec = bestRecordOf(g.id);
     const sub = d.sessions === 0 ? g.desc
       : decaying ? '지금 LP가 줄고 있어요'
       : decaySoon ? `${fmtRemain(ttd)} 뒤 LP 감소`
+      : rec ? `${d.sessions}판 · ⏱ ${rec}`
       : `${d.sessions}판 · 최고 ${nf(d.best)}`;
 
     const row = document.createElement('button');
@@ -246,6 +269,18 @@ function showRules(game) {
   $('#rules-tip').textContent = r.tip;
   $('#rules-note-sect').classList.toggle('hidden', !r.note);
   if (r.note) $('#rules-note').textContent = r.note;
+
+  // 시간 기록이 있는 종목이면 지금까지의 최단 기록을 함께 보여준다
+  const spec = TIME_RECORDS[game.id];
+  const recs = state.disc[game.id].records || {};
+  const rows = spec ? spec.order.filter(([k]) => recs[k] !== undefined) : [];
+  $('#rules-rec-sect').classList.toggle('hidden', rows.length === 0);
+  if (rows.length) {
+    $('#rules-rec-head').textContent = spec.title;
+    $('#rules-records').innerHTML = rows
+      .map(([k, label]) => `<div class="stat-row"><span>${label}</span><span>${fmtDur(recs[k], spec.unit)}</span></div>`)
+      .join('');
+  }
   $('#rules-scroll').scrollTop = 0;
   // 방법을 봤다고 기록 — 다음부터는 바로 시작
   if (!state.seenRules[game.id]) {
@@ -293,12 +328,32 @@ function startSession(game, skipRules = false) {
   activeTimers.push(cd);
 }
 
+// 시간 표시: ms는 그대로, 초는 60초 넘으면 MM:SS
+function fmtDur(v, unit) {
+  if (unit === 'ms') return Math.round(v) + 'ms';
+  if (v < 60) return (v < 10 ? v.toFixed(1) : Math.round(v)) + '초';
+  return `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`;
+}
+
 // ---------- 결과 ----------
 function endSession(game, result) {
   const d = state.disc[game.id];
   const before = d.rating;
   const beforeTier = tierOf(before);
   const delta = ratingDelta(result.perf);
+
+  // 시간 기록 (낮을수록 좋음). 게임이 result.time = {key, value, unit, label}로 넘긴다.
+  // recordSession이 저장하기 전에 반영해야 함께 저장된다.
+  let timeNew = false, timePrev;
+  if (result.time && Number.isFinite(result.time.value)) {
+    if (!d.records) d.records = {};
+    timePrev = d.records[result.time.key];
+    if (timePrev === undefined || result.time.value < timePrev) {
+      d.records[result.time.key] = result.time.value;
+      timeNew = true;
+    }
+  }
+
   const { newRecord } = recordSession(state, game.id, { score: result.score, delta, perf: result.perf });
   const after = d.rating;
   const afterTier = tierOf(after);
@@ -313,7 +368,10 @@ function endSession(game, result) {
     <div class="result-game">${game.name}</div>
     <div class="result-score">${nf(result.score)}</div>
     <div class="result-detail">${result.detail}</div>
-    ${newRecord ? '<div class="result-newrecord">자기 최고 기록</div>' : ''}
+    ${result.time ? (timeNew
+      ? `<div class="result-newrecord">⏱ ${result.time.label} 신기록 — ${fmtDur(result.time.value, result.time.unit)}${timePrev !== undefined ? ` (이전 ${fmtDur(timePrev, result.time.unit)})` : ''}</div>`
+      : `<div class="result-best">⏱ ${result.time.label} ${fmtDur(result.time.value, result.time.unit)} · 기록 ${fmtDur(d.records[result.time.key], result.time.unit)}</div>`) : ''}
+    ${newRecord ? '<div class="result-newrecord">자기 최고 점수</div>' : ''}
     <div class="result-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP</div>
     <div class="result-tier" style="color:${afterTier.color}">${afterTier.name} · ${nf(after)}</div>
     <div class="result-bar"><i style="width:${tierProgress(after) * 100}%;background:${afterTier.color}"></i></div>
