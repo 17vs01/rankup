@@ -13,15 +13,14 @@ import { compassGame } from './games/compass.js';
 import { eyeballGame } from './games/eyeball.js';
 import { sudokuGame } from './games/sudoku.js';
 import { chainGame } from './games/chain.js';
-import { calibGame } from './games/calib.js';
-import { metamemGame } from './games/metamem.js';
 import { t24Game } from './games/t24.js';
+import { korvocabGame } from './games/korvocab.js';
 
 const GAMES = [
   sudokuGame, chainGame,
-  mathGame, vocabGame, memoryGame, focusGame,
+  korvocabGame, vocabGame, mathGame, memoryGame, focusGame,
   unpredictGame, chronoGame, compassGame, eyeballGame,
-  calibGame, metamemGame, t24Game,
+  t24Game,
 ];
 const $ = sel => document.querySelector(sel);
 

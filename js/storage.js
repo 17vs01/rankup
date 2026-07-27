@@ -4,9 +4,9 @@ import { START_RATING, pendingDecay } from './rating.js';
 const KEY = 'rankup-state-v1';
 
 const DISC_IDS = [
-  'math', 'vocab', 'memory', 'focus',
+  'math', 'vocab', 'korvocab', 'memory', 'focus',
   'unpredict', 'chrono', 'compass', 'eyeball',
-  'sudoku', 'chain', 'calib', 'metamem', 't24',
+  'sudoku', 'chain', 't24',
 ];
 
 function freshDisc() {
@@ -26,7 +26,8 @@ function freshState() {
   for (const id of DISC_IDS) disc[id] = freshDisc();
   return {
     disc,
-    vocab: {},          // wordIdx -> { box, due } 라이트너 박스
+    vocab: {},          // wordIdx -> { box, due } 라이트너 박스 (영어)
+    korvocab: {},       // 같은 구조 (한국어)
     sudoku: null,       // 진행 중인 스도쿠 판 (이어하기)
     theme: 'onyx',      // 화면 테마
     seenRules: {},      // gameId -> 1, 방법 화면을 본 종목

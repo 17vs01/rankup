@@ -1,6 +1,9 @@
 // 머릿속 나침반 — 경로 적분(path integration)
 // 전진·회전 지시를 머릿속으로만 따라가고, 마지막에 "출발점이 지금 어느 쪽인지" 답한다.
 // 지하철 출구, 주차장에서 차 찾기에 실제로 쓰는 능력.
+//
+// 답한 뒤에는 걸어온 길을 지도로 되짚어 보여준다. 방향만 알려주면
+// "왜 틀렸는지"를 모르는데, 경로를 보면 어디서 어긋났는지 눈으로 잡힌다.
 import { sfx } from '../audio.js';
 
 const ROUNDS = 5;
@@ -22,6 +25,7 @@ const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
 // heading: 0=북 1=동 2=남 3=서
 const STEP = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+const HEAD_NAME = ['북', '동', '남', '서'];
 
 export const compassGame = {
   id: 'compass',
@@ -40,15 +44,18 @@ export const compassGame = {
       <div class="cp-stage" id="cp-stage"></div>
       <div class="cp-progress" id="cp-progress"></div>
       <div class="cp-rose hidden" id="cp-rose"></div>
+      <div class="cp-review hidden" id="cp-review"></div>
     `;
     const $round = ctx.body.querySelector('#cp-round');
     const $stage = ctx.body.querySelector('#cp-stage');
     const $prog = ctx.body.querySelector('#cp-progress');
     const $rose = ctx.body.querySelector('#cp-rose');
+    const $review = ctx.body.querySelector('#cp-review');
 
     function buildRoute() {
       let x = 0, y = 0, h = 0;
       const seq = [];
+      const pts = [[0, 0]];   // 꺾인 지점들 — 나중에 지도로 그린다
       let moves = 0;
       for (let i = 0; i < steps; i++) {
         // 남은 지시로 최소 2번은 전진해야 방향이 결정된다
@@ -58,6 +65,7 @@ export const compassGame = {
           x += STEP[h][0] * n;
           y += STEP[h][1] * n;
           seq.push({ text: `${n}칸 전진`, icon: '⬆' });
+          pts.push([x, y]);
           moves++;
         } else {
           const t = ri(0, 2);
@@ -66,7 +74,7 @@ export const compassGame = {
           else { h = (h + 2) % 4; seq.push({ text: '뒤로 돌기', icon: '⇅' }); }
         }
       }
-      return { seq, x, y, h };
+      return { seq, x, y, h, pts };
     }
 
     // 그냥 생성하면 경로가 원점에서 멀어지기만 해서 정답이 '뒤'로 쏠린다.
@@ -95,6 +103,101 @@ export const compassGame = {
       return idx;                            // 0=앞, 1=앞오른쪽, 2=오른쪽 ...
     }
 
+    // ---------- 되짚어보기 지도 ----------
+    // 상대방위(내 진행방향 기준) → 절대 각도. 화면은 항상 북쪽이 위.
+    function absAngleOf(relIdx, h) {
+      // relIdx 0=앞 … 시계방향. h는 현재 바라보는 절대 방위.
+      return (relIdx * 45 + h * 90) * Math.PI / 180;   // 북 기준 시계방향 라디안
+    }
+
+    function drawReview(route, ansIdx, myIdx, ok) {
+      const pts = route.pts;
+      // 경계 계산 후 여백을 둔 viewBox
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      const minX = Math.min(...xs) - 1.4, maxX = Math.max(...xs) + 1.4;
+      const minY = Math.min(...ys) - 1.4, maxY = Math.max(...ys) + 1.4;
+      const w = maxX - minX, hgt = maxY - minY;
+      const side = Math.max(w, hgt);
+      // 정사각 뷰로 맞춰 격자가 찌그러지지 않게
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+      const x0 = cx - side / 2, y0 = cy - side / 2;
+      const S = 100 / side;                              // 좌표 → SVG 배율
+      const px = x => (x - x0) * S;
+      const py = y => (y0 + side - y) * S;               // y축 뒤집기 (북쪽이 위)
+
+      // 격자
+      let grid = '';
+      for (let g = Math.ceil(x0); g <= x0 + side; g++) {
+        grid += `<line x1="${px(g).toFixed(1)}" y1="0" x2="${px(g).toFixed(1)}" y2="100" class="cpm-grid"/>`;
+      }
+      for (let g = Math.ceil(y0); g <= y0 + side; g++) {
+        grid += `<line x1="0" y1="${py(g).toFixed(1)}" x2="100" y2="${py(g).toFixed(1)}" class="cpm-grid"/>`;
+      }
+
+      // 걸어온 길
+      const poly = pts.map(p => `${px(p[0]).toFixed(1)},${py(p[1]).toFixed(1)}`).join(' ');
+      // 꺾인 지점 번호
+      let dots = '';
+      pts.forEach((p, i) => {
+        if (i === 0 || i === pts.length - 1) return;
+        dots += `<circle cx="${px(p[0]).toFixed(1)}" cy="${py(p[1]).toFixed(1)}" r="1.6" class="cpm-node"/>`;
+      });
+
+      const ex = px(route.x), ey = py(route.y);
+      const sx = px(0), sy = py(0);
+
+      // 지금 바라보는 방향 (짧은 화살표)
+      const hAng = route.h * Math.PI / 2;
+      const hx = ex + Math.sin(hAng) * 11, hy = ey - Math.cos(hAng) * 11;
+
+      // 정답 방향 = 현재 위치 → 출발점
+      const aAng = absAngleOf(ansIdx, route.h);
+      const ax = ex + Math.sin(aAng) * 16, ay = ey - Math.cos(aAng) * 16;
+      // 내가 고른 방향
+      const mAng = absAngleOf(myIdx, route.h);
+      const mx = ex + Math.sin(mAng) * 16, my = ey - Math.cos(mAng) * 16;
+
+      const wrongArrow = ok ? '' : `
+        <line x1="${ex.toFixed(1)}" y1="${ey.toFixed(1)}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}"
+              class="cpm-mine" marker-end="url(#cpm-mine-head)"/>`;
+
+      $review.innerHTML = `
+        <svg viewBox="-6 -6 112 112" class="cpm-svg">
+          <defs>
+            <marker id="cpm-ans-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" class="cpm-ans-fill"/>
+            </marker>
+            <marker id="cpm-mine-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" class="cpm-mine-fill"/>
+            </marker>
+            <marker id="cpm-face-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" class="cpm-face-fill"/>
+            </marker>
+          </defs>
+          ${grid}
+          <polyline points="${poly}" class="cpm-path"/>
+          ${dots}
+          <line x1="${ex.toFixed(1)}" y1="${ey.toFixed(1)}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}"
+                class="cpm-face" marker-end="url(#cpm-face-head)"/>
+          <line x1="${ex.toFixed(1)}" y1="${ey.toFixed(1)}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}"
+                class="cpm-ans" marker-end="url(#cpm-ans-head)"/>
+          ${wrongArrow}
+          <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="3.2" class="cpm-start"/>
+          <text x="${sx.toFixed(1)}" y="${(sy - 5.5).toFixed(1)}" class="cpm-label">출발</text>
+          <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.2" class="cpm-end"/>
+          <text x="${ex.toFixed(1)}" y="${(ey + 8).toFixed(1)}" class="cpm-label">지금</text>
+          <text x="2" y="7" class="cpm-north">↑ 북</text>
+        </svg>
+        <div class="cpm-legend">
+          <span><i class="lg-path"></i>걸어온 길</span>
+          <span><i class="lg-face"></i>보는 방향 (${HEAD_NAME[route.h]})</span>
+          <span><i class="lg-ans"></i>출발점 = ${DIRS[ansIdx].label}</span>
+          ${ok ? '' : `<span><i class="lg-mine"></i>내 답 = ${DIRS[myIdx].label}</span>`}
+        </div>
+      `;
+      $review.classList.remove('hidden');
+    }
+
     function startRound() {
       round++;
       if (round > ROUNDS) return end();
@@ -104,13 +207,15 @@ export const compassGame = {
 
       $round.textContent = `${round} / ${ROUNDS}라운드 · 지시 ${route.seq.length}개`;
       $rose.classList.add('hidden');
+      $review.classList.add('hidden');
+      $review.innerHTML = '';
       $prog.innerHTML = '';
       $stage.className = 'cp-stage';
       $stage.innerHTML = '<div class="cp-instr">북쪽을 보고 출발</div>';
 
       let i = 0;
       const play = () => {
-        if (i >= route.seq.length) return ask(ansIdx);
+        if (i >= route.seq.length) return ask(route, ansIdx);
         const s = route.seq[i];
         $stage.innerHTML = `<div class="cp-icon">${s.icon}</div><div class="cp-instr">${s.text}</div>`;
         sfx.tick();
@@ -123,7 +228,7 @@ export const compassGame = {
       ctx.delay(play, 900);
     }
 
-    function ask(ansIdx) {
+    function ask(route, ansIdx) {
       $stage.className = 'cp-stage ask';
       $stage.innerHTML = '<div class="cp-instr">출발점은 지금 어느 쪽?</div>';
       $rose.classList.remove('hidden');
@@ -156,7 +261,11 @@ export const compassGame = {
               if (el.textContent === DIRS[ansIdx].label) el.classList.add('correct');
             });
           }
-          ctx.delay(startRound, ok ? 500 : 1100);
+          // 걸어온 길을 지도로 되짚어 준다
+          $stage.innerHTML = `<div class="cp-instr">${ok ? '정답' : `정답은 ${DIRS[ansIdx].label}`}</div>`;
+          drawReview(route, ansIdx, c.idx, ok);
+          // 틀렸으면 더 오래 보여준다
+          ctx.delay(startRound, ok ? 2200 : 3800);
         });
         $rose.appendChild(b);
       });

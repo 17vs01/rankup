@@ -30,6 +30,7 @@ export const chronoGame = {
       <div class="ch-hint" id="ch-hint"></div>
       <div class="ch-fake" id="ch-fake"><div class="ch-fake-fill" id="ch-fake-fill"></div></div>
       <button class="ch-pad" id="ch-pad"></button>
+      <div class="ch-timeline hidden" id="ch-timeline"></div>
       <div class="ch-log" id="ch-log"></div>
     `;
     const $round = ctx.body.querySelector('#ch-round');
@@ -38,7 +39,31 @@ export const chronoGame = {
     const $fake = ctx.body.querySelector('#ch-fake');
     const $fakeFill = ctx.body.querySelector('#ch-fake-fill');
     const $pad = ctx.body.querySelector('#ch-pad');
+    const $timeline = ctx.body.querySelector('#ch-timeline');
     const $log = ctx.body.querySelector('#ch-log');
+
+    // 얼마나 빗나갔는지 눈으로 보여준다. 숫자만으로는 "0.5초 늦음"이 감이 안 온다.
+    function drawTimeline(target, actual) {
+      const span = Math.max(target, actual) * 1.18;
+      const pct = v => (v / span) * 100;
+      const tolLo = pct(target * (1 - tol)), tolHi = pct(target * (1 + tol));
+      const late = actual > target;
+      const a = pct(Math.min(target, actual)), b = pct(Math.max(target, actual));
+      $timeline.innerHTML = `
+        <div class="ch-track">
+          <div class="ch-tol" style="left:${tolLo.toFixed(1)}%;width:${(tolHi - tolLo).toFixed(1)}%"></div>
+          <div class="ch-gap ${late ? 'late' : 'early'}" style="left:${a.toFixed(1)}%;width:${(b - a).toFixed(1)}%"></div>
+          <div class="ch-mark target" style="left:${pct(target).toFixed(1)}%"><span>목표</span></div>
+          <div class="ch-mark mine" style="left:${pct(actual).toFixed(1)}%"><span>내 탭</span></div>
+        </div>
+        <div class="ch-track-note">${
+          Math.abs(actual - target) < 0.05 ? '거의 정확했습니다'
+          : late ? `${(actual - target).toFixed(2)}초 늦게 눌렀습니다`
+          : `${(target - actual).toFixed(2)}초 일찍 눌렀습니다`
+        } · 회색 구간이 허용 범위</div>
+      `;
+      $timeline.classList.remove('hidden');
+    }
 
     let phase = 'ready';   // ready → running → result
     let target = 0, startAt = 0, rafId = null;
@@ -52,6 +77,7 @@ export const chronoGame = {
       $target.textContent = `${target.toFixed(1)}초`;
       $hint.textContent = '탭하면 시작 — 다시 탭할 때까지의 시간을 맞추세요';
       $fake.classList.add('hidden');
+      $timeline.classList.add('hidden');
       $pad.className = 'ch-pad ready';
       $pad.textContent = '시작';
     }
@@ -92,6 +118,7 @@ export const chronoGame = {
       $pad.className = 'ch-pad ' + (pts >= 70 ? 'good' : pts > 0 ? 'ok' : 'miss');
       $pad.textContent = `${actual.toFixed(2)}초`;
       $hint.textContent = `목표 ${target.toFixed(1)}초 · ${sign}${diff.toFixed(2)}초 · ${pts}점`;
+      drawTimeline(target, actual);
       if (pts >= 70) sfx.good(); else sfx.bad();
 
       const chip = document.createElement('span');
@@ -99,7 +126,7 @@ export const chronoGame = {
       chip.textContent = `${sign}${diff.toFixed(1)}s`;
       $log.appendChild(chip);
 
-      ctx.delay(setup, 1400);
+      ctx.delay(setup, pts >= 70 ? 1800 : 2600);   // 틀렸으면 타임라인을 더 오래 본다
     }
 
     $pad.addEventListener('pointerdown', e => {

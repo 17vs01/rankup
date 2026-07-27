@@ -54,27 +54,53 @@ export const eyeballGame = {
         const deg = ri(8, 172);
         const rot = ri(0, 359);
         const r = 100;
-        const p = a => [150 + r * Math.cos(a * Math.PI / 180), 150 - r * Math.sin(a * Math.PI / 180)];
+        const p = (a, rad = r) => [150 + rad * Math.cos(a * Math.PI / 180), 150 - rad * Math.sin(a * Math.PI / 180)];
         const [x1, y1] = p(rot), [x2, y2] = p(rot + deg);
-        return {
-          prompt: '두 선이 이루는 각은?',
-          svg: `<svg viewBox="0 0 300 300"><g stroke="var(--accent)" stroke-width="5" stroke-linecap="round">
+        const base = `<g stroke="var(--accent)" stroke-width="5" stroke-linecap="round">
             <line x1="150" y1="150" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}"/>
             <line x1="150" y1="150" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>
-            </g><circle cx="150" cy="150" r="5" fill="var(--text)"/></svg>`,
+            </g><circle cx="150" cy="150" r="5" fill="var(--text)"/>`;
+        return {
+          prompt: '두 선이 이루는 각은?',
+          svg: `<svg viewBox="0 0 300 300">${base}</svg>`,
           answer: deg, lo: 0, hi: 180, unit: '°', flashMs: 0,
+          // 내가 답한 각을 실제 각 위에 겹쳐 그린다 — 얼마나 벌어졌는지 눈으로 보인다
+          review(guess) {
+            const [gx, gy] = p(rot + guess, 78);
+            const arcR = 42;
+            const [ax, ay] = p(rot, arcR), [bx, by] = p(rot + deg, arcR);
+            const large = deg > 180 ? 1 : 0;
+            return `<svg viewBox="0 0 300 300">
+              <path d="M ${ax.toFixed(1)} ${ay.toFixed(1)} A ${arcR} ${arcR} 0 ${large} 0 ${bx.toFixed(1)} ${by.toFixed(1)}"
+                    fill="none" stroke="var(--good)" stroke-width="3"/>
+              ${base}
+              <line x1="150" y1="150" x2="${gx.toFixed(1)}" y2="${gy.toFixed(1)}"
+                    stroke="var(--bad)" stroke-width="4" stroke-dasharray="7 5" stroke-linecap="round"/>
+              <text x="150" y="292" text-anchor="middle" font-size="19" fill="var(--text-dim)">
+                정답 ${deg}° · 내 답 ${guess}°</text>
+            </svg>`;
+          },
         };
       },
       function ratio() {
         const pct = ri(12, 92);
         const hA = 200, hB = Math.round(hA * pct / 100);
+        const base = `<rect x="60" y="${290 - hA}" width="60" height="${hA}" rx="4" fill="var(--text-dim)"/>
+            <rect x="180" y="${290 - hB}" width="60" height="${hB}" rx="4" fill="var(--accent)"/>`;
         return {
           prompt: '오른쪽 막대는 왼쪽의 몇 %?',
-          svg: `<svg viewBox="0 0 300 300">
-            <rect x="60" y="${290 - hA}" width="60" height="${hA}" rx="4" fill="var(--text-dim)"/>
-            <rect x="180" y="${290 - hB}" width="60" height="${hB}" rx="4" fill="var(--accent)"/>
-            </svg>`,
+          svg: `<svg viewBox="0 0 300 300">${base}</svg>`,
           answer: pct, lo: 0, hi: 100, unit: '%', flashMs: 0,
+          // 내가 답한 높이를 점선으로 그어 실제 높이와 나란히 비교시킨다
+          review(guess) {
+            const gy = 290 - Math.round(hA * guess / 100);
+            return `<svg viewBox="0 0 300 300">${base}
+              <line x1="50" y1="${290 - hB}" x2="250" y2="${290 - hB}" stroke="var(--good)" stroke-width="3"/>
+              <line x1="50" y1="${gy}" x2="250" y2="${gy}" stroke="var(--bad)" stroke-width="3" stroke-dasharray="7 5"/>
+              <text x="150" y="292" text-anchor="middle" font-size="19" fill="var(--text-dim)">
+                정답 ${pct}% · 내 답 ${guess}%</text>
+            </svg>`;
+          },
         };
       },
       function count() {
@@ -92,13 +118,22 @@ export const eyeballGame = {
       function area() {
         const pct = ri(10, 90);
         const rA = 110, rB = Math.round(rA * Math.sqrt(pct / 100));
+        const base = `<circle cx="105" cy="150" r="${rA}" fill="var(--text-dim)"/>
+            <circle cx="215" cy="215" r="${rB}" fill="var(--accent)"/>`;
         return {
           prompt: '작은 원의 넓이는 큰 원의 몇 %?',
-          svg: `<svg viewBox="0 0 300 300">
-            <circle cx="105" cy="150" r="${rA}" fill="var(--text-dim)"/>
-            <circle cx="215" cy="215" r="${rB}" fill="var(--accent)"/>
-            </svg>`,
+          svg: `<svg viewBox="0 0 300 300">${base}</svg>`,
           answer: pct, lo: 0, hi: 100, unit: '%', flashMs: 0,
+          // 내가 답한 비율의 원을 점선으로 겹쳐 그린다 (넓이 비율은 반지름의 제곱)
+          review(guess) {
+            const rG = (rA * Math.sqrt(Math.max(0, guess) / 100)).toFixed(1);
+            return `<svg viewBox="0 0 300 300">${base}
+              <circle cx="215" cy="215" r="${rB}" fill="none" stroke="var(--good)" stroke-width="3"/>
+              <circle cx="215" cy="215" r="${rG}" fill="none" stroke="var(--bad)" stroke-width="3" stroke-dasharray="7 5"/>
+              <text x="150" y="292" text-anchor="middle" font-size="19" fill="var(--text-dim)">
+                정답 ${pct}% · 내 답 ${guess}%</text>
+            </svg>`;
+          },
         };
       },
     ];
@@ -159,11 +194,13 @@ export const eyeballGame = {
       $mine.classList.remove('hidden');
       $truth.classList.remove('hidden');
       $mine.className = 'eb-marker ' + (pts >= 70 ? 'good' : pts > 0 ? 'ok' : 'miss');
-      if (cur.flashMs > 0) $canvas.innerHTML = cur.svg;   // 개수 문제는 정답 공개
+      // 정답을 그림 위에 겹쳐 보여준다 — 눈금만으로는 얼마나 빗나갔는지 감이 안 온다
+      if (cur.review) $canvas.innerHTML = cur.review(guess);
+      else if (cur.flashMs > 0) $canvas.innerHTML = cur.svg;   // 개수 문제는 원본 공개
       $fb.innerHTML = `내 답 <b>${guess}${cur.unit}</b> · 정답 <b>${cur.answer}${cur.unit}</b> · ${pts}점`;
       if (pts >= 70) sfx.good(); else sfx.bad();
 
-      ctx.delay(next, 1300);
+      ctx.delay(next, pts >= 70 ? 1500 : 2400);
     });
 
     function end() {

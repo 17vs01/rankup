@@ -485,6 +485,27 @@ html, body {
 .ch-pad.good { background: var(--good-soft); border-color: var(--good); color: var(--good); }
 .ch-pad.ok { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .ch-pad.miss { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+/* 체내 시계 · 얼마나 빗나갔는지 */
+.ch-timeline { width: 100%; max-width: 290px; display: flex; flex-direction: column; gap: 9px; }
+.ch-track {
+  position: relative; height: 34px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.ch-tol { position: absolute; top: 0; bottom: 0; background: var(--same); }
+.ch-gap { position: absolute; top: 0; bottom: 0; }
+.ch-gap.late { background: var(--bad-soft); }
+.ch-gap.early { background: var(--accent-soft); }
+.ch-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; }
+.ch-mark span {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 9.5px; font-weight: 600; white-space: nowrap; letter-spacing: .02em;
+}
+.ch-mark.target { background: var(--good); }
+.ch-mark.target span { top: -13px; color: var(--good); }
+.ch-mark.mine { background: var(--accent); }
+.ch-mark.mine span { bottom: -13px; color: var(--accent); }
+.ch-track-note { font-size: 11.5px; color: var(--text-dim); text-align: center; word-break: keep-all; }
+
 .ch-log { display: flex; gap: 6px; min-height: 24px; }
 .ch-chip { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 6px; background: var(--surface); }
 .ch-chip.good { color: var(--good); }
@@ -509,6 +530,36 @@ html, body {
 .cp-dir.correct { background: var(--good-soft); border-color: var(--good); }
 .cp-dir.wrong { background: var(--bad-soft); border-color: var(--bad); }
 .cp-me { display: flex; align-items: center; justify-content: center; font-size: 24px; }
+
+/* 나침반 · 걸어온 길 되짚어보기 */
+.cp-review { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 10px; }
+.cpm-svg {
+  width: 100%; aspect-ratio: 1; display: block;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+}
+.cpm-grid { stroke: var(--line); stroke-width: .4; }
+.cpm-path { fill: none; stroke: var(--text-dim); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.cpm-node { fill: var(--text-faint); }
+.cpm-start { fill: var(--text); }
+.cpm-end { fill: var(--accent); }
+.cpm-face { stroke: var(--text-faint); stroke-width: 1.2; stroke-dasharray: 2 1.6; }
+.cpm-face-fill { fill: var(--text-faint); }
+.cpm-ans { stroke: var(--good); stroke-width: 2.2; }
+.cpm-ans-fill { fill: var(--good); }
+.cpm-mine { stroke: var(--bad); stroke-width: 2.2; stroke-dasharray: 3 2; }
+.cpm-mine-fill { fill: var(--bad); }
+.cpm-label { fill: var(--text-dim); font-size: 5px; text-anchor: middle; font-weight: 600; }
+.cpm-north { fill: var(--text-faint); font-size: 5px; font-weight: 600; }
+.cpm-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: center;
+  font-size: 11px; color: var(--text-dim);
+}
+.cpm-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.cpm-legend i { width: 14px; height: 2px; border-radius: 1px; flex: 0 0 auto; }
+.cpm-legend .lg-path { background: var(--text-dim); }
+.cpm-legend .lg-face { background: var(--text-faint); }
+.cpm-legend .lg-ans { background: var(--good); height: 3px; }
+.cpm-legend .lg-mine { background: var(--bad); height: 3px; }
 
 /* ---------- 📐 눈대중 ---------- */
 .eb-round { font-size: 12px; color: var(--text-faint); letter-spacing: .06em; }
@@ -609,6 +660,19 @@ html, body {
 .ch2-banner.boom { color: var(--accent); font-size: 16px; font-weight: 700; }
 .ch2-banner.bad { color: var(--bad); }
 .ch2-skip { max-width: 350px; padding: 11px; font-size: 13px; }
+
+/* ---------- 📝 우리말 ---------- */
+.kv-cat {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .12em; color: var(--accent);
+  border: 1px solid var(--accent-soft); background: var(--accent-soft);
+  border-radius: 5px; padding: 3px 9px; min-height: 21px;
+}
+.kv-word { font-size: 34px; font-weight: 600; text-align: center; word-break: keep-all; padding: 0 12px; }
+.kv-ex {
+  font-size: 12.5px; color: var(--text-faint); min-height: 34px; text-align: center;
+  padding: 0 16px; word-break: keep-all; line-height: 1.5; opacity: 0; transition: opacity .2s;
+}
+.kv-ex.show { opacity: 1; color: var(--text-dim); }
 
 /* ---------- 🎯 확신도 ---------- */
 .cb-round { font-size: 12px; color: var(--text-faint); letter-spacing: .06em; }
