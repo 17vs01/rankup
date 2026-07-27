@@ -2,6 +2,7 @@ import { loadState, saveState, applyDecay, recordSession } from './storage.js';
 import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.js';
 import { sfx } from './audio.js';
 import { exportState, readBackup, fmtDate } from './backup.js';
+import { RULES } from './rules.js';
 import { mathGame } from './games/math.js';
 import { vocabGame } from './games/vocab.js';
 import { memoryGame } from './games/memory.js';
@@ -145,10 +146,15 @@ function renderHome() {
         <span class="row-tier" style="color:${t.color}">${t.name}</span>
         <span class="row-lp">${nf(d.rating)}</span>
       </span>
+      <span class="row-info" data-info="${g.id}" role="button" aria-label="게임 방법">?</span>
     `;
     // 행 아래 1px 선의 길이 = 다음 티어까지의 진행도
     row.style.setProperty('--prog', (tierProgress(d.rating) * 100) + '%');
-    row.addEventListener('click', () => startSession(g));
+    row.addEventListener('click', e => {
+      // ⓘ는 시작이 아니라 방법 화면으로
+      if (e.target.closest('.row-info')) { showRules(g); return; }
+      startSession(g);
+    });
     $list.appendChild(row);
   }
 
@@ -228,8 +234,33 @@ function makeCtx(game) {
   };
 }
 
-function startSession(game) {
+// ---------- 게임 방법 ----------
+function showRules(game) {
+  const r = RULES[game.id];
+  if (!r) { startSession(game, true); return; }
+  $('#rules-icon').textContent = game.icon;
+  $('#rules-name').textContent = game.name;
+  $('#rules-summary').textContent = r.summary;
+  $('#rules-steps').innerHTML = r.how.map(s => `<li>${s}</li>`).join('');
+  $('#rules-scoring').textContent = r.scoring;
+  $('#rules-tip').textContent = r.tip;
+  $('#rules-note-sect').classList.toggle('hidden', !r.note);
+  if (r.note) $('#rules-note').textContent = r.note;
+  $('#rules-scroll').scrollTop = 0;
+  // 방법을 봤다고 기록 — 다음부터는 바로 시작
+  if (!state.seenRules[game.id]) {
+    state.seenRules[game.id] = 1;
+    saveState(state);
+  }
+  $('#btn-rules-start').onclick = () => startSession(game, true);
+  show('#screen-rules');
+}
+$('#btn-rules-back').addEventListener('click', () => renderHome());
+
+function startSession(game, skipRules = false) {
   if (sessionActive) return;   // 재진입 방지
+  // 처음 하는 종목은 방법부터 보여준다
+  if (!skipRules && !state.seenRules[game.id]) { showRules(game); return; }
   clearSession();
   currentCtx = null;
   sessionActive = true;
@@ -240,9 +271,11 @@ function startSession(game) {
   const $body = $('#game-body');
   show('#screen-game');
 
-  // 3초 카운트다운
+  // 3초 카운트다운 — 그 사이에 한 줄 요약을 되새겨준다
   let n = 3;
-  $body.innerHTML = `<div class="countdown">${n}</div>`;
+  const rule = RULES[game.id];
+  $body.innerHTML = `<div class="countdown">${n}</div>`
+    + (rule ? `<div class="countdown-summary">${rule.summary}</div>` : '');
   sfx.tick();
   const cd = setInterval(() => {
     n--;
