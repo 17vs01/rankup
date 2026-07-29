@@ -1,29 +1,50 @@
 // 24 만들기 — 역산
 // 숫자 4개와 사칙연산으로 목표값을 만든다. 푸는 것보다 만드는 게 어렵다.
 // 숫자 탭 → 연산자 탭 → 숫자 탭 하면 두 수가 하나로 합쳐진다. 마지막 한 수가 목표값이면 성공.
+//
+// 모드 2가지
+//  - 기본: 5문제. 시간 제한 없음. 전체를 푼 총 시간이 기록으로 남는다.
+//  - 타임어택: 단계마다 제한 시간 안에 5문제를 다 풀어야 다음 단계로. 단계가 오를수록 시간이 줄어든다.
 import { sfx } from '../audio.js';
 
 const ROUNDS = 5;
 const EPS = 1e-6;
 const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
-// 네 수로 target을 만들 수 있는지 (분수 허용)
-function solvable(nums, target) {
+// 타임어택 단계별 제한 시간(초). 12%씩 줄고 45초에서 멈춘다.
+function limitFor(level) {
+  return Math.max(45, Math.round(150 * Math.pow(0.88, level - 1)));
+}
+
+// 네 수로 target을 만드는 풀이를 찾는다. 못 만들면 null.
+// 각 항은 { v: 값, s: 그 값을 만든 식 } 으로 들고 다녀서, 마지막에 식 전체를 보여줄 수 있다.
+function solve24(nums, target) {
   function rec(arr) {
-    if (arr.length === 1) return Math.abs(arr[0] - target) < EPS;
+    if (arr.length === 1) return Math.abs(arr[0].v - target) < EPS ? arr[0].s : null;
     for (let i = 0; i < arr.length; i++) {
       for (let j = 0; j < arr.length; j++) {
         if (i === j) continue;
         const rest = arr.filter((_, k) => k !== i && k !== j);
         const a = arr[i], b = arr[j];
-        const results = [a + b, a - b, a * b];
-        if (Math.abs(b) > EPS) results.push(a / b);
-        for (const r of results) if (rec([...rest, r])) return true;
+        const ops = [
+          ['+', a.v + b.v],
+          ['-', a.v - b.v],
+          ['×', a.v * b.v],
+        ];
+        if (Math.abs(b.v) > EPS) ops.push(['÷', a.v / b.v]);
+        for (const [sym, v] of ops) {
+          // 교환법칙이 성립하는 연산은 한 방향만 봐도 된다
+          if ((sym === '+' || sym === '×') && i > j) continue;
+          const got = rec([...rest, { v, s: `(${a.s} ${sym} ${b.s})` }]);
+          if (got) return got;
+        }
       }
     }
-    return false;
+    return null;
   }
-  return rec(nums);
+  const sol = rec(nums.map(n => ({ v: n, s: String(n) })));
+  // 가장 바깥 괄호는 군더더기라 벗긴다
+  return sol && sol.startsWith('(') && sol.endsWith(')') ? sol.slice(1, -1) : sol;
 }
 
 // 난이도: 목표값과 숫자 범위가 올라간다
@@ -32,9 +53,10 @@ function makePuzzle(L) {
   const hi = Math.min(13, 9 + Math.floor(L * 1.5));
   for (let t = 0; t < 800; t++) {
     const nums = [ri(1, hi), ri(1, hi), ri(1, hi), ri(1, hi)];
-    if (solvable(nums, target)) return { nums, target };
+    const sol = solve24(nums, target);
+    if (sol) return { nums, target, sol };
   }
-  return { nums: [4, 6, 2, 3], target: 24 };
+  return { nums: [4, 6, 2, 3], target: 24, sol: solve24([4, 6, 2, 3], 24) };
 }
 
 const fmt = x => {
@@ -48,12 +70,22 @@ export const t24Game = {
   name: '24 만들기',
   icon: '🧩',
   desc: '숫자 4개로 목표값 만들기',
+  modes: [
+    { id: 'normal', name: '기본', desc: '5문제 · 시간 제한 없음' },
+    { id: 'attack', name: '타임어택', desc: '단계가 오를수록 시간이 줄어듭니다' },
+  ],
   run(ctx) {
     const L = Math.max(0, (ctx.rating - 800) / 250);
-    let round = 0, solved = 0, totalSec = 0;
-    const solveTimes = [];   // 라운드별 해결 시간 (최단 기록용)
-    let tiles = [], target = 0, selIdx = -1, op = null, startAt = 0;
-    const history = [];   // 되돌리기용 타일 스냅샷
+    const attack = ctx.mode === 'attack';
+
+    let level = 1;                 // 타임어택 단계
+    let round = 0, solved = 0, levelSolved = 0, totalSec = 0;
+    const solveTimes = [];         // 라운드별 해결 시간 (최단 기록용)
+    let tiles = [], target = 0, sol = '', selIdx = -1, op = null, startAt = 0;
+    let revealed = false;          // 정답을 보여준 상태 (확인 대기)
+    let finished = false;
+    const history = [];            // 되돌리기용 타일 스냅샷
+    let levelStart = 0, tickId = null;
 
     ctx.body.innerHTML = `
       <div class="t24-round" id="t24-round"></div>
@@ -67,7 +99,11 @@ export const t24Game = {
       </div>
       <div class="t24-actions">
         <button class="btn-secondary" id="t24-undo">↺ 되돌리기</button>
-        <button class="btn-secondary" id="t24-skip">건너뛰기</button>
+        <button class="btn-secondary" id="t24-skip">모르겠어요</button>
+      </div>
+      <div class="t24-reveal hidden" id="t24-reveal">
+        <div class="t24-sol" id="t24-sol"></div>
+        <button class="btn-primary" id="t24-ok">확인했어요</button>
       </div>
       <div class="t24-fb" id="t24-fb"></div>
     `;
@@ -75,7 +111,31 @@ export const t24Game = {
     const $target = ctx.body.querySelector('#t24-target');
     const $tiles = ctx.body.querySelector('#t24-tiles');
     const $ops = ctx.body.querySelector('#t24-ops');
+    const $actions = ctx.body.querySelector('.t24-actions');
+    const $reveal = ctx.body.querySelector('#t24-reveal');
+    const $sol = ctx.body.querySelector('#t24-sol');
     const $fb = ctx.body.querySelector('#t24-fb');
+
+    // ---------- 타임어택 시계 ----------
+    function startLevelClock() {
+      if (!attack) return;
+      levelStart = performance.now();
+      if (tickId) clearInterval(tickId);
+      const limit = limitFor(level);
+      const tick = () => {
+        const left = limit - (performance.now() - levelStart) / 1000;
+        if (left <= 0) {
+          clearInterval(tickId); tickId = null;
+          ctx.setTimerText('0s');
+          return end(true);
+        }
+        ctx.setTimerText(Math.ceil(left) + 's');
+        const $t = document.querySelector('#game-timer');
+        if ($t) $t.classList.toggle('urgent', left <= 10);
+      };
+      tick();
+      tickId = ctx.trackInterval(setInterval(tick, 250));
+    }
 
     function render() {
       $tiles.innerHTML = '';
@@ -90,24 +150,42 @@ export const t24Game = {
     }
 
     function newRound() {
+      if (finished) return;
       round++;
-      if (round > ROUNDS) return end();
+      // 타임어택: 5문제를 다 풀면 다음 단계 (시간이 줄어든다)
+      if (round > ROUNDS) {
+        if (!attack) return end(false);
+        level++;
+        round = 1;
+        levelSolved = 0;
+        sfx.tierup();
+        $fb.textContent = `${level}단계 — 제한 ${limitFor(level)}초`;
+        $fb.className = 't24-fb good';
+        startLevelClock();
+      }
       const p = makePuzzle(L);
       tiles = p.nums.slice();
       target = p.target;
-      selIdx = -1; op = null;
+      sol = p.sol;
+      selIdx = -1; op = null; revealed = false;
       history.length = 0;
       startAt = performance.now();
-      $round.textContent = `${round} / ${ROUNDS}라운드`;
+      $reveal.classList.add('hidden');
+      $actions.classList.remove('hidden');
+      $round.textContent = attack
+        ? `${level}단계 · ${round} / ${ROUNDS}문제`
+        : `${round} / ${ROUNDS}라운드`;
       $target.textContent = target;
-      $fb.textContent = '두 수를 골라 합치세요';
-      $fb.className = 't24-fb';
+      if (!$fb.textContent.includes('단계 —')) {
+        $fb.textContent = '두 수를 골라 합치세요';
+        $fb.className = 't24-fb';
+      }
       render();
     }
 
     $tiles.addEventListener('pointerdown', e => {
       const b = e.target.closest('.t24-tile');
-      if (!b) return;
+      if (!b || revealed || finished) return;
       e.preventDefault();
       const i = Number(b.dataset.i);
       if (selIdx === -1) { selIdx = i; render(); return; }
@@ -131,14 +209,14 @@ export const t24Game = {
       if (tiles.length === 1) {
         const ok = Math.abs(tiles[0] - target) < EPS;
         if (ok) {
-          solved++;
+          solved++; levelSolved++;
           const took = (performance.now() - startAt) / 1000;
           totalSec += took;
           solveTimes.push(took);
           sfx.good();
           $fb.textContent = `성공! ${fmt(tiles[0])} = ${target}  (${took.toFixed(1)}초)`;
           $fb.className = 't24-fb good';
-          ctx.delay(newRound, 1100);
+          ctx.delay(newRound, 900);
         } else {
           sfx.bad();
           $fb.textContent = `${fmt(tiles[0])} … 목표는 ${target}. 되돌리세요`;
@@ -149,7 +227,7 @@ export const t24Game = {
 
     $ops.addEventListener('pointerdown', e => {
       const b = e.target.closest('.t24-op');
-      if (!b) return;
+      if (!b || revealed || finished) return;
       e.preventDefault();
       op = b.dataset.o === op ? null : b.dataset.o;
       render();
@@ -157,6 +235,7 @@ export const t24Game = {
 
     ctx.body.querySelector('#t24-undo').addEventListener('pointerdown', e => {
       e.preventDefault();
+      if (revealed || finished) return;
       const prev = history.pop();
       if (!prev) return;
       tiles = prev; selIdx = -1; op = null;
@@ -165,24 +244,65 @@ export const t24Game = {
       render();
     });
 
+    // 모르겠으면 정답 식을 보여준다. 확인해야 다음 문제로 넘어간다.
     ctx.body.querySelector('#t24-skip').addEventListener('pointerdown', e => {
       e.preventDefault();
+      if (revealed || finished) return;
+      revealed = true;
       sfx.bad();
+      $sol.innerHTML = `<b>${sol}</b> = ${target}`;
+      $reveal.classList.remove('hidden');
+      $actions.classList.add('hidden');
+      $fb.textContent = '이렇게 푸는 문제였습니다';
+      $fb.className = 't24-fb';
+    });
+
+    ctx.body.querySelector('#t24-ok').addEventListener('pointerdown', e => {
+      e.preventDefault();
+      if (!revealed || finished) return;
+      revealed = false;
+      $reveal.classList.add('hidden');
+      $actions.classList.remove('hidden');
       newRound();
     });
 
-    function end() {
+    function end(timeUp) {
+      if (finished) return;
+      finished = true;
+      if (tickId) { clearInterval(tickId); tickId = null; }
+
+      if (attack) {
+        // 타임어택은 시간 초과로만 끝난다. 진행 중이던 단계는 통과하지 못한 것.
+        const passed = level - 1;
+        ctx.finish({
+          score: passed,
+          perf: (passed + 0.6) / 2.2,
+          detail: `${passed}단계 통과 · ${level}단계에서 시간 초과 (${levelSolved}/${ROUNDS}문제)`,
+          time: passed > 0
+            ? { key: 'level_max', value: passed, unit: 'level', label: '타임어택 최고' } : null,
+        });
+        return;
+      }
+
       const avg = solved > 0 ? (totalSec / solved).toFixed(0) : '–';
       const fastest = solveTimes.length ? Math.min(...solveTimes) : null;
+      // 5문제를 전부 푼 판만 "전체 최단" 기록으로 인정한다
+      const allSolved = solved === ROUNDS;
       ctx.finish({
         score: solved,
         perf: solved / 3.2,
         detail: `${solved}/${ROUNDS} 성공${solved ? ` · 평균 ${avg}초` : ''}`,
-        // 한 문제를 가장 빨리 푼 시간
-        time: fastest !== null ? { key: 'time_one', value: fastest, unit: 'sec', label: '한 문제 최단' } : null,
+        time: allSolved
+          ? { key: 'time_all', value: totalSec, unit: 'sec', label: '전체 최단' }
+          : (fastest !== null ? { key: 'time_one', value: fastest, unit: 'sec', label: '한 문제 최단' } : null),
       });
     }
 
+    if (attack) {
+      $fb.textContent = `1단계 — 제한 ${limitFor(1)}초`;
+      $fb.className = 't24-fb good';
+      startLevelClock();
+    }
     newRound();
   },
 };

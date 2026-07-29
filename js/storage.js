@@ -31,6 +31,7 @@ function freshState() {
     sudoku: null,       // 진행 중인 스도쿠 판 (이어하기)
     theme: 'onyx',      // 화면 테마
     seenRules: {},      // gameId -> 1, 방법 화면을 본 종목
+    modes: {},          // gameId -> 마지막으로 고른 모드 id
     totalSessions: 0,
     streak: 0,
     lastStreakDay: '',
@@ -50,6 +51,7 @@ export function loadState() {
   if (s.sudoku === undefined) s.sudoku = null;
   if (!s.theme) s.theme = 'onyx';
   if (!s.seenRules) s.seenRules = {};
+  if (!s.modes) s.modes = {};
   return s;
 }
 

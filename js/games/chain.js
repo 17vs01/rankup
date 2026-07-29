@@ -53,7 +53,16 @@ export const chainGame = {
   name: '연쇄 스도쿠',
   icon: '💥',
   desc: '막힌 판을 뚫는 한 칸 찾기',
+  modes: [
+    { id: 'normal', name: '기본', desc: '4판 · 시간 제한 없음' },
+    { id: 'attack', name: '타임어택', desc: '단계가 오를수록 시간이 줄어듭니다' },
+  ],
   run(ctx) {
+    const attack = ctx.mode === 'attack';
+    let level = 1, tickId = null, levelStart = 0;
+    // 단계별 제한 시간(초). 4판을 이 안에 다 뚫어야 다음 단계로.
+    const limitFor = lv => Math.max(60, Math.round(200 * Math.pow(0.88, lv - 1)));
+
     // 난이도 3단계.
     // 막힌 판은 싱글(단독후보·숨은단독)이 이미 소진돼 있어서 포인팅 페어 같은
     // 고급 기법이 필요하다. 브론즈에게 그걸 요구하면 한 칸도 못 뚫는다.
@@ -71,7 +80,7 @@ export const chainGame = {
     let grid, solution, fixed, cands, sel = -1, busy = false, finished = false, roundDone = false;
     const cells = [];
 
-    ctx.setTitle('💥 연쇄 스도쿠');
+    ctx.setTitle('💥 연쇄 스도쿠' + (attack ? ' · 타임어택' : ''));
     ctx.body.innerHTML = `
       <div class="sd-status">
         <span>실수 <b id="ch2-mist">0</b>/${MAX_MISTAKES}</span>
@@ -147,16 +156,46 @@ export const chainGame = {
       $auto.textContent = totalChain;
     }
 
+    // 타임어택 시계 — 단계마다 다시 시작한다
+    function startLevelClock() {
+      if (!attack) return;
+      levelStart = performance.now();
+      if (tickId) clearInterval(tickId);
+      const limit = limitFor(level);
+      const tick = () => {
+        const left = limit - (performance.now() - levelStart) / 1000;
+        if (left <= 0) {
+          clearInterval(tickId); tickId = null;
+          ctx.setTimerText('0s');
+          return end(true);
+        }
+        ctx.setTimerText(Math.ceil(left) + 's');
+        const $t = document.querySelector('#game-timer');
+        if ($t) $t.classList.toggle('urgent', left <= 15);
+      };
+      tick();
+      tickId = ctx.trackInterval(setInterval(tick, 250));
+    }
+
     function newRound() {
+      if (finished) return;
       round++;
-      if (round > ROUNDS) return end();
+      if (round > ROUNDS) {
+        // 기본 모드는 여기서 끝. 타임어택은 다음 단계로 올라가며 시간이 줄어든다.
+        if (!attack) return end(false);
+        level++;
+        round = 1;
+        cleared = 0;
+        sfx.tierup();
+        startLevelClock();
+      }
       const b = tier === 'easy' ? buildEasy() : buildStalled(clues);
       grid = Int8Array.from(b.start);
       fixed = Int8Array.from(b.start);
       solution = b.solution;
       cands = candidates(SPEC9, grid);
       sel = -1; roundDone = false; busy = false;
-      $round.textContent = `${round} / ${ROUNDS}`;
+      $round.textContent = attack ? `${level}단계 · ${round}/${ROUNDS}` : `${round} / ${ROUNDS}`;
       $banner.textContent = HINT_TEXT[tier];
       $banner.className = 'ch2-banner';
       render();
@@ -243,11 +282,28 @@ export const chainGame = {
       ctx.delay(newRound, 700);
     });
 
-    const readSec = ctx.stopwatch();
+    // 기본 모드만 흐르는 시계를 쓴다. 타임어택은 단계별 카운트다운이 대신한다.
+    const readSec = attack ? null : ctx.stopwatch();
 
-    function end() {
+    function end(timeUp) {
       if (finished) return;
       finished = true;
+      if (tickId) { clearInterval(tickId); tickId = null; }
+
+      if (attack) {
+        // 타임어택은 실패로만 끝난다 (시간 초과 또는 실수 3회).
+        // 어느 쪽이든 진행 중이던 단계는 통과하지 못한 것이다.
+        const passed = level - 1;
+        ctx.finish({
+          score: totalChain,
+          perf: (passed + 0.6) / 1.6,
+          detail: `${passed}단계 통과 · ${level}단계에서 ${timeUp ? '시간 초과' : '실수 3회'} · ${totalChain}칸 연쇄`,
+          time: passed > 0
+            ? { key: 'chain_level', value: passed, unit: 'level', label: '타임어택 최고' } : null,
+        });
+        return;
+      }
+
       const sec = readSec();
       ctx.finish({
         score: totalChain,
@@ -258,6 +314,7 @@ export const chainGame = {
       });
     }
 
+    if (attack) startLevelClock();
     newRound();
   },
 };

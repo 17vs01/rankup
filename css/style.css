@@ -379,6 +379,24 @@ html, body {
   padding: 0 24px; word-break: keep-all; line-height: 1.6;
 }
 
+/* ---------- 게임 방법 · 모드 선택 ---------- */
+.rules-modes { display: flex; flex-direction: column; gap: 9px; width: 100%; }
+.mode-btn {
+  width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 15px 18px; display: flex; flex-direction: column; gap: 4px;
+  position: relative; transition: background .15s, border-color .15s;
+}
+.mode-btn:active { background: var(--surface-2); }
+.mode-btn.on { border-color: var(--accent); background: var(--accent-soft); }
+.mode-btn::after {
+  content: '→'; position: absolute; right: 18px; top: 50%;
+  transform: translateY(-50%); color: var(--text-faint); font-size: 15px;
+}
+.mode-name { font-size: 16px; font-weight: 600; }
+.mode-btn.on .mode-name { color: var(--accent); }
+.mode-desc { font-size: 12px; color: var(--text-faint); word-break: keep-all; }
+
 /* ---------- 설정 · 화면 테마 ---------- */
 .themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
 .theme {
@@ -743,6 +761,18 @@ html, body {
 .t24-op.sel { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .t24-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; width: 100%; max-width: 310px; }
 .t24-actions .btn-secondary { padding: 11px; font-size: 13px; }
+/* 모르겠을 때 보여주는 정답 풀이 */
+.t24-reveal {
+  display: flex; flex-direction: column; gap: 12px; align-items: center;
+  width: 100%; max-width: 310px;
+}
+.t24-sol {
+  width: 100%; text-align: center; padding: 14px 12px;
+  background: var(--surface); border: 1px solid var(--accent-soft); border-radius: 12px;
+  font-size: 17px; color: var(--text-dim); line-height: 1.5; word-break: break-word;
+}
+.t24-sol b { color: var(--accent); font-weight: 600; }
+
 .t24-fb { font-size: 13px; color: var(--text-dim); min-height: 22px; text-align: center; word-break: keep-all; }
 .t24-fb.good { color: var(--good); font-weight: 600; }
 .t24-fb.bad { color: var(--bad); }

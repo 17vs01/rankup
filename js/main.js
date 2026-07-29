@@ -66,8 +66,9 @@ const nf = n => n.toLocaleString('ko-KR');
 // 시간 기록을 가진 종목과 표시 이름
 const TIME_RECORDS = {
   sudoku:  { unit: 'sec', title: '난이도별 최단 완주', order: ['쉬움', '보통', '어려움', '전문가', '마스터', '극한'].map(n => ['time_' + n, n]) },
-  chain:   { unit: 'sec', title: '최단 기록', order: [['time_full', '4판 돌파']] },
-  t24:     { unit: 'sec', title: '최단 기록', order: [['time_one', '한 문제']] },
+  chain:   { unit: 'sec', title: '내 기록', order: [['time_full', '4판 돌파 최단'], ['chain_level', '타임어택 최고', 'level']] },
+  // order 각 행은 [키, 라벨, 단위?]. 단위를 생략하면 spec.unit을 쓴다.
+  t24:     { unit: 'sec', title: '내 기록', order: [['time_one', '한 문제 최단'], ['time_all', '5문제 전체 최단'], ['level_max', '타임어택 최고', 'level']] },
   focus:   { unit: 'ms',  title: '최고 기록', order: [['time_reaction', '반응속도']] },
 };
 
@@ -77,8 +78,8 @@ function bestRecordOf(gameId) {
   if (!spec) return null;
   const recs = state.disc[gameId].records || {};
   for (let i = spec.order.length - 1; i >= 0; i--) {
-    const [key, label] = spec.order[i];
-    if (recs[key] !== undefined) return `${label} ${fmtDur(recs[key], spec.unit)}`;
+    const [key, label, unit] = spec.order[i];
+    if (recs[key] !== undefined) return `${label} ${fmtDur(recs[key], unit || spec.unit)}`;
   }
   return null;
 }
@@ -202,6 +203,8 @@ function makeCtx(game) {
     body: $('#game-body'),
     rating: d.rating,
     state,
+    // 모드가 있는 종목이면 지금 고른 모드 id (없으면 null)
+    mode: game.modes ? (state.modes[game.id] || game.modes[0].id) : null,
     setTitle(t) { $('#game-title').textContent = t; },
     setTimerText(s) { $('#game-timer').textContent = s; },
     persist() { saveState(state); },
@@ -213,6 +216,8 @@ function makeCtx(game) {
       activeTimers.push(id);
       return id;
     },
+    // 게임이 직접 만든 setInterval을 세션 종료 시 같이 정리하도록 맡긴다
+    trackInterval(id) { activeTimers.push(id); return id; },
     // 흐르는 시간(카운트업). 제한시간이 없는 종목용.
     stopwatch(onTick) {
       if (sessionTimer) clearInterval(sessionTimer);
@@ -277,16 +282,37 @@ function showRules(game) {
   if (rows.length) {
     $('#rules-rec-head').textContent = spec.title;
     $('#rules-records').innerHTML = rows
-      .map(([k, label]) => `<div class="stat-row"><span>${label}</span><span>${fmtDur(recs[k], spec.unit)}</span></div>`)
+      .map(([k, label, unit]) => `<div class="stat-row"><span>${label}</span><span>${fmtDur(recs[k], unit || spec.unit)}</span></div>`)
       .join('');
   }
+  // 모드가 있는 종목은 시작 버튼을 모드별로 나눠 보여준다
+  const $modes = $('#rules-modes');
+  $modes.innerHTML = '';
+  if (game.modes && game.modes.length) {
+    $('#btn-rules-start').classList.add('hidden');
+    const cur = state.modes[game.id] || game.modes[0].id;
+    for (const m of game.modes) {
+      const b = document.createElement('button');
+      b.className = 'mode-btn' + (m.id === cur ? ' on' : '');
+      b.innerHTML = `<span class="mode-name">${m.name}</span><span class="mode-desc">${m.desc}</span>`;
+      b.addEventListener('click', () => {
+        state.modes[game.id] = m.id;
+        saveState(state);
+        startSession(game, true);
+      });
+      $modes.appendChild(b);
+    }
+  } else {
+    $('#btn-rules-start').classList.remove('hidden');
+    $('#btn-rules-start').onclick = () => startSession(game, true);
+  }
+
   $('#rules-scroll').scrollTop = 0;
   // 방법을 봤다고 기록 — 다음부터는 바로 시작
   if (!state.seenRules[game.id]) {
     state.seenRules[game.id] = 1;
     saveState(state);
   }
-  $('#btn-rules-start').onclick = () => startSession(game, true);
   show('#screen-rules');
 }
 $('#btn-rules-back').addEventListener('click', () => renderHome());
@@ -299,7 +325,10 @@ function startSession(game, skipRules = false) {
   currentCtx = null;
   sessionActive = true;
   currentGame = game;
-  $('#game-title').textContent = `${game.icon} ${game.name}`;
+  const modeId = game.modes ? (state.modes[game.id] || game.modes[0].id) : null;
+  const modeName = modeId && game.modes.find(m => m.id === modeId);
+  $('#game-title').textContent = `${game.icon} ${game.name}`
+    + (modeName && modeName.id !== game.modes[0].id ? ` · ${modeName.name}` : '');
   $('#game-timer').textContent = '';
   $('#game-timer').classList.remove('urgent');
   const $body = $('#game-body');
@@ -329,6 +358,7 @@ function startSession(game, skipRules = false) {
 
 // 시간 표시: ms는 그대로, 초는 60초 넘으면 MM:SS
 function fmtDur(v, unit) {
+  if (unit === 'level') return Math.round(v) + '단계';
   if (unit === 'ms') return Math.round(v) + 'ms';
   if (v < 60) return (v < 10 ? v.toFixed(1) : Math.round(v)) + '초';
   return `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`;
@@ -341,14 +371,17 @@ function endSession(game, result) {
   const beforeTier = tierOf(before);
   const delta = ratingDelta(result.perf);
 
-  // 시간 기록 (낮을수록 좋음). 게임이 result.time = {key, value, unit, label}로 넘긴다.
+  // 개인 기록. 게임이 result.time = {key, value, unit, label} 로 넘긴다.
+  // unit이 'level'이면 높을수록 좋고, 나머지(sec/ms)는 낮을수록 좋다.
   // recordSession이 저장하기 전에 반영해야 함께 저장된다.
   let timeNew = false, timePrev;
   if (result.time && Number.isFinite(result.time.value)) {
     if (!d.records) d.records = {};
-    timePrev = d.records[result.time.key];
-    if (timePrev === undefined || result.time.value < timePrev) {
-      d.records[result.time.key] = result.time.value;
+    const { key, value, unit } = result.time;
+    const higherBetter = unit === 'level';
+    timePrev = d.records[key];
+    if (timePrev === undefined || (higherBetter ? value > timePrev : value < timePrev)) {
+      d.records[key] = value;
       timeNew = true;
     }
   }
