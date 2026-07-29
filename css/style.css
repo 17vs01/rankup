@@ -616,7 +616,11 @@ html, body {
 .sd-status b.hot { color: var(--accent); }
 
 .sd-grid {
-  display: grid; grid-template-columns: repeat(9, 1fr);
+  display: grid;
+  /* minmax(0,1fr)로 못박아야 후보 메모가 행을 밀어내지 못한다.
+     1fr만 쓰면 최소 크기가 콘텐츠라서, 메모 3줄이 셀을 키워 마지막 행이 잘린다. */
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-rows: repeat(9, minmax(0, 1fr));
   width: 100%; max-width: 350px; aspect-ratio: 1;
   border: 1px solid var(--line-2); border-radius: 3px; overflow: hidden;
   background: var(--line); gap: 1px;
@@ -644,7 +648,11 @@ html, body {
   60% { transform: scale(1.15); }
   100% { transform: scale(1); }
 }
-.sd-notes { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; height: 100%; font-size: min(2.7vw, 10px); color: var(--text-faint); }
+.sd-notes {
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, minmax(0, 1fr));
+  width: 100%; height: 100%; font-size: min(2.7vw, 10px); line-height: 1;
+  color: var(--text-faint); overflow: hidden;
+}
 .sd-notes span { display: flex; align-items: center; justify-content: center; }
 
 .sd-tools { display: flex; width: 100%; max-width: 350px; justify-content: space-around; }
