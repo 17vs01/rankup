@@ -1,10 +1,11 @@
 // 오프라인 캐시 서비스워커
-const CACHE = 'rankup-v11';
+const CACHE = 'rankup-v12';
 const ASSETS = [
   '.',
   'index.html',
   'css/style.css',
   'js/main.js',
+  'js/platform.js',
   'js/rating.js',
   'js/storage.js',
   'js/audio.js',
@@ -27,6 +28,8 @@ const ASSETS = [
   'js/games/t24.js',
   'manifest.webmanifest',
   'icon.svg',
+  'icon-192.png',
+  'icon-512.png',
 ];
 
 // addAll은 하나라도 실패하면 전부 버린다. 파일 하나 때문에 오프라인이 통째로
@@ -81,8 +84,11 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     fetch(e.request)
       .then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        // 404/500 같은 실패 응답으로 멀쩡한 캐시를 덮어쓰지 않는다
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
         return res;
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }))

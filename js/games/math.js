@@ -37,7 +37,8 @@ function genProblem(level) {
       () => { const a = ri(200, 999), b = ri(45, 178); return { q: `${a} − ${b}`, a: a - b }; },
       () => { const a = ri(13, 49), b = ri(4, 9); return { q: `${a} × ${b}`, a: a * b }; },
       () => { const b = ri(4, 12), c = ri(6, 19); return { q: `${b * c} ÷ ${b}`, a: c }; },
-      () => { const a = pick([10, 20, 25, 50]), b = ri(2, 16) * 10; return { q: `${b}의 ${a}%`, a: b * a / 100 }; },
+      // 답이 정수가 되도록: 25%는 20의 배수에만 건다 (키패드에 소수점이 없다)
+      () => { const a = pick([10, 20, 25, 50]), b = a === 25 ? ri(1, 8) * 20 : ri(2, 16) * 10; return { q: `${b}의 ${a}%`, a: b * a / 100 }; },
     ])();
   }
   if (L < 5.5) {
@@ -46,7 +47,7 @@ function genProblem(level) {
       () => { const a = ri(400, 999), b = ri(123, a - 100); return { q: `${a} − ${b}`, a: a - b }; },
       () => { const a = ri(12, 24), b = ri(11, 19); return { q: `${a} × ${b}`, a: a * b }; },
       () => { const a = ri(13, 25); return { q: `${a}²`, a: a * a }; },
-      () => { const a = pick([5, 15, 30, 40, 60, 75]), b = ri(2, 20) * 10; return { q: `${b}의 ${a}%`, a: b * a / 100 }; },
+      () => { const a = pick([5, 15, 30, 40, 60, 75]), b = (a % 10 === 5) ? ri(1, 10) * 20 : ri(2, 20) * 10; return { q: `${b}의 ${a}%`, a: b * a / 100 }; },
       () => { const b = ri(12, 19), c = ri(6, 15); return { q: `${b * c} ÷ ${b}`, a: c }; },
     ])();
   }
@@ -56,7 +57,7 @@ function genProblem(level) {
       () => { const a = ri(23, 59), b = ri(21, 49); return { q: `${a} × ${b}`, a: a * b }; },
       () => { const a = ri(24, 39); return { q: `${a}²`, a: a * a }; },
       () => { const a = ri(3, 9), b = ri(3, 9), c = ri(3, 9); return { q: `${a} × ${b} + ${c}²`, a: a * b + c * c }; },
-      () => { const a = pick([12.5, 35, 45, 65, 85]), b = ri(4, 24) * 20; return { q: `${b}의 ${a}%`, a: b * a / 100 }; },
+      () => { const a = pick([12.5, 35, 45, 65, 85]), b = a === 12.5 ? ri(2, 12) * 40 : ri(4, 24) * 20; return { q: `${b}의 ${a}%`, a: b * a / 100 }; },
     ])();
   }
   // L 7.5+ : 최상위
@@ -76,7 +77,7 @@ export const mathGame = {
   desc: '60초 연산 스프린트',
   run(ctx) {
     const level = (ctx.rating - 800) / 150;
-    let correct = 0, wrong = 0, input = '', cur = null;
+    let correct = 0, wrong = 0, streak = 0, input = '', cur = null;
 
     ctx.body.innerHTML = `
       <div class="score-line" id="m-score">정답 <b>0</b> · 오답 0</div>
@@ -106,7 +107,8 @@ export const mathGame = {
     }
 
     function updateScore() {
-      $s.innerHTML = `정답 <b>${correct}</b> · 오답 ${wrong}`;
+      $s.innerHTML = `정답 <b>${correct}</b> · 오답 ${wrong}`
+        + (streak >= 3 ? `<span class="combo">🔥 ${streak}연속</span>` : '');
     }
 
     function tryAutoSubmit(forceJudge) {
@@ -118,16 +120,21 @@ export const mathGame = {
       const over = input.length > String(cur.a).length;
       if (!forceJudge && val !== cur.a && !over) return;
       if (val === cur.a) {
-        correct++; sfx.good();
-        ctx.body.classList.remove('flash-bad'); void ctx.body.offsetWidth;
+        correct++; streak++; sfx.combo(streak);
+        // 같은 클래스가 남아 있으면 애니메이션이 다시 안 돈다 — 둘 다 뗀 뒤 리플로
+        ctx.body.classList.remove('flash-bad', 'flash-good'); void ctx.body.offsetWidth;
         ctx.body.classList.add('flash-good');
         updateScore(); next();
       } else {
-        wrong++; sfx.bad();
-        ctx.body.classList.remove('flash-good'); void ctx.body.offsetWidth;
+        wrong++; streak = 0; sfx.bad();
+        ctx.body.classList.remove('flash-good', 'flash-bad'); void ctx.body.offsetWidth;
         ctx.body.classList.add('flash-bad');
         $p.textContent = `${cur.q} = ${cur.a}`;
         updateScore();
+        // 정답이 공개된 700ms 동안 입력을 잠근다 (cur가 없으면 키패드가 무시된다)
+        cur = null;
+        input = '';
+        $a.innerHTML = '&nbsp;';
         ctx.delay(() => next(), 700);
       }
     }

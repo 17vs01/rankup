@@ -151,6 +151,10 @@ export const unpredictGame = {
         score: misses,
         perf: (misses / TRIALS) / EXPECTED_MISS_RATE,
         detail: `AI 적중률 ${hitRate}% · 최고 ${bestEvade}연속 회피`,
+        times: [
+          { key: 'ai_rate_min', value: hitRate, unit: 'pct', label: '최저 AI 적중률' },
+          { key: 'evade_best', value: bestEvade, unit: 'count', label: '최다 연속 회피' },
+        ],
       });
     }
 

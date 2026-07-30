@@ -3,6 +3,10 @@ import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.
 import { sfx } from './audio.js';
 import { exportState, readBackup, fmtDate } from './backup.js';
 import { RULES } from './rules.js';
+import {
+  initPlatform, inToss, getNickname, setLocalNickname, canEditNickname,
+  compositeScore, submitScore, openLeaderboard, hasLeaderboard, onBack,
+} from './platform.js';
 import { mathGame } from './games/math.js';
 import { vocabGame } from './games/vocab.js';
 import { memoryGame } from './games/memory.js';
@@ -69,7 +73,9 @@ const TIME_RECORDS = {
   chain:   { unit: 'sec', title: '내 기록', order: [['time_full', '4판 돌파 최단'], ['chain_level', '타임어택 최고', 'level']] },
   // order 각 행은 [키, 라벨, 단위?]. 단위를 생략하면 spec.unit을 쓴다.
   t24:     { unit: 'sec', title: '내 기록', order: [['time_one', '한 문제 최단'], ['time_all', '5문제 전체 최단'], ['level_max', '타임어택 최고', 'level']] },
-  focus:   { unit: 'ms',  title: '최고 기록', order: [['time_reaction', '반응속도']] },
+  focus:   { unit: 'ms',  title: '최고 기록', order: [['time_reaction', '반응속도'], ['focus_level', '3종목 레벨', 'level']] },
+  memory:  { unit: 'cells', title: '내 기록', order: [['memory_cells', '최고 칸수']] },
+  unpredict: { unit: 'count', title: '내 기록', order: [['ai_rate_min', '최저 AI 적중률', 'pct'], ['evade_best', '최다 연속 회피']] },
 };
 
 // 홈 목록 한 줄에 넣을 대표 기록 (가장 어려운 난이도 우선)
@@ -98,7 +104,7 @@ function renderHome() {
   const decayed = applyDecay(state);
   const now = Date.now();
 
-  // ----- 종합: 13종목 평균을 한 줄로 -----
+  // ----- 종합: 전 종목 평균을 한 줄로 -----
   const avg = Math.round(GAMES.reduce((a, g) => a + state.disc[g.id].rating, 0) / GAMES.length);
   const avgTier = tierOf(avg);
   const nextTier = TIERS[avgTier.idx + 1];
@@ -359,10 +365,19 @@ function startSession(game, skipRules = false) {
 // 시간 표시: ms는 그대로, 초는 60초 넘으면 MM:SS
 function fmtDur(v, unit) {
   if (unit === 'level') return Math.round(v) + '단계';
+  if (unit === 'cells') return Math.round(v) + '칸';
+  if (unit === 'count') return Math.round(v) + '연속';
+  if (unit === 'pct') return Math.round(v) + '%';
   if (unit === 'ms') return Math.round(v) + 'ms';
-  if (v < 60) return (v < 10 ? v.toFixed(1) : Math.round(v)) + '초';
-  return `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`;
+  if (v < 10) return v.toFixed(1) + '초';
+  // 먼저 초 단위로 반올림해야 "1:60" 같은 표기가 안 나온다
+  const s = Math.round(v);
+  if (s < 60) return s + '초';
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
+
+// 이 단위는 높을수록 좋은 기록이다 (나머지는 낮을수록)
+const HIGHER_BETTER = new Set(['level', 'cells', 'count']);
 
 // ---------- 결과 ----------
 function endSession(game, result) {
@@ -371,22 +386,28 @@ function endSession(game, result) {
   const beforeTier = tierOf(before);
   const delta = ratingDelta(result.perf);
 
-  // 개인 기록. 게임이 result.time = {key, value, unit, label} 로 넘긴다.
-  // unit이 'level'이면 높을수록 좋고, 나머지(sec/ms)는 낮을수록 좋다.
+  // 개인 기록. 게임이 result.time = {key, value, unit, label} 하나 또는
+  // result.times = [...] 여러 개를 넘긴다. HIGHER_BETTER 단위만 높을수록 좋다.
   // recordSession이 저장하기 전에 반영해야 함께 저장된다.
-  let timeNew = false, timePrev;
-  if (result.time && Number.isFinite(result.time.value)) {
-    if (!d.records) d.records = {};
-    const { key, value, unit } = result.time;
-    const higherBetter = unit === 'level';
-    timePrev = d.records[key];
-    if (timePrev === undefined || (higherBetter ? value > timePrev : value < timePrev)) {
-      d.records[key] = value;
-      timeNew = true;
-    }
+  const recLines = [];
+  if (!d.records) d.records = {};
+  const timeList = (result.times || (result.time ? [result.time] : []))
+    .filter(t => t && Number.isFinite(t.value));
+  for (const t of timeList) {
+    const higherBetter = HIGHER_BETTER.has(t.unit);
+    const prev = d.records[t.key];
+    const isNew = prev === undefined || (higherBetter ? t.value > prev : t.value < prev);
+    if (isNew) d.records[t.key] = t.value;
+    const mark = t.unit === 'sec' || t.unit === 'ms' ? '⏱' : '🏅';
+    recLines.push(isNew
+      ? `<div class="result-newrecord">${mark} ${t.label} 신기록 — ${fmtDur(t.value, t.unit)}${prev !== undefined ? ` (이전 ${fmtDur(prev, t.unit)})` : ''}</div>`
+      : `<div class="result-best">${mark} ${t.label} ${fmtDur(t.value, t.unit)} · 기록 ${fmtDur(d.records[t.key], t.unit)}</div>`);
   }
 
   const { newRecord } = recordSession(state, game.id, { score: result.score, delta, perf: result.perf });
+
+  // 토스 안이면 종합 점수를 리더보드에 올린다 (실패해도 조용히 넘어간다)
+  if (inToss()) submitScore(compositeScore(state, GAMES.map(g => g.id)));
   const after = d.rating;
   const afterTier = tierOf(after);
   const tierUp = afterTier.idx > beforeTier.idx;
@@ -400,9 +421,7 @@ function endSession(game, result) {
     <div class="result-game">${game.name}</div>
     <div class="result-score">${nf(result.score)}</div>
     <div class="result-detail">${result.detail}</div>
-    ${result.time ? (timeNew
-      ? `<div class="result-newrecord">⏱ ${result.time.label} 신기록 — ${fmtDur(result.time.value, result.time.unit)}${timePrev !== undefined ? ` (이전 ${fmtDur(timePrev, result.time.unit)})` : ''}</div>`
-      : `<div class="result-best">⏱ ${result.time.label} ${fmtDur(result.time.value, result.time.unit)} · 기록 ${fmtDur(d.records[result.time.key], result.time.unit)}</div>`) : ''}
+    ${recLines.join('')}
     ${newRecord ? '<div class="result-newrecord">자기 최고 점수</div>' : ''}
     <div class="result-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP</div>
     <div class="result-tier" style="color:${afterTier.color}">${afterTier.name} · ${nf(after)}</div>
@@ -420,14 +439,76 @@ function endSession(game, result) {
 }
 
 // ---------- 중단 ----------
-$('#btn-abort').addEventListener('click', () => {
+function abortGame() {
   if (currentCtx && currentCtx.onAbort) {
     try { currentCtx.onAbort(); } catch { /* 저장 실패가 중단을 막지 않게 */ }
   }
   currentCtx = null;
+  sessionToken++;              // 살아남은 콜백이 finish를 부르지 못하게
   clearSession();
+  $('#game-body').innerHTML = '';
   renderHome();
-});
+}
+$('#btn-abort').addEventListener('click', abortGame);
+
+// ---------- 토스트 ----------
+let toastTimer = null;
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 1800);
+}
+
+// ---------- 기록 보기 ----------
+let nickname = null;
+async function refreshNickname() {
+  try { nickname = await getNickname(); } catch { nickname = null; }
+}
+
+function renderRecords() {
+  applyDecay(state);
+  const $sc = $('#records-scroll');
+  const comp = compositeScore(state, GAMES.map(g => g.id));
+  const sects = [];
+  sects.push(`<div class="sect">
+    <div class="sect-head">종합${nickname ? ` · ${nickname}` : ''}</div>
+    <div class="stat-rows">
+      <div class="stat-row"><span>종합 점수${inToss() ? ' (리더보드 제출값)' : ''}</span><span>${nf(comp)}</span></div>
+      <div class="stat-row"><span>누적 판수</span><span>${nf(state.totalSessions)}판</span></div>
+      <div class="stat-row"><span>연속 기록</span><span>${state.streak > 0 ? state.streak + '일' : '없음'}</span></div>
+    </div>
+  </div>`);
+  for (const g of GAMES) {
+    const d = state.disc[g.id];
+    if (d.sessions === 0) {
+      sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name}</div>
+        <p class="sect-desc" style="margin:0">아직 기록이 없어요</p></div>`);
+      continue;
+    }
+    const t = tierOf(d.rating);
+    const recent = state.history.find(h => h.discId === g.id);
+    const lines = [
+      `<div class="stat-row"><span>레이팅</span><span style="color:${t.color}">${t.name} · ${nf(d.rating)}</span></div>`,
+      `<div class="stat-row"><span>최고 점수</span><span>${nf(d.best)}</span></div>`,
+    ];
+    if (recent) lines.push(`<div class="stat-row"><span>최근 점수</span><span>${nf(recent.score)}</span></div>`);
+    const spec = TIME_RECORDS[g.id];
+    if (spec) for (const [key, label, unit] of spec.order) {
+      if (d.records && d.records[key] !== undefined) {
+        lines.push(`<div class="stat-row"><span>${label}</span><span>${fmtDur(d.records[key], unit || spec.unit)}</span></div>`);
+      }
+    }
+    sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name} · ${nf(d.sessions)}판</div>
+      <div class="stat-rows">${lines.join('')}</div></div>`);
+  }
+  $sc.innerHTML = sects.join('');
+  $sc.scrollTop = 0;
+  show('#screen-records');
+}
+$('#btn-records').addEventListener('click', renderRecords);
+$('#btn-records-back').addEventListener('click', renderHome);
 
 // 홈으로 복귀 시 갱신 (탭 복귀 포함)
 document.addEventListener('visibilitychange', () => {
@@ -466,6 +547,14 @@ function fmtWhen(ms) {
 }
 
 function renderSettings() {
+  // 별명: 토스 밖에서만 직접 정할 수 있다
+  const $nick = $('#nick-sect');
+  if (canEditNickname()) {
+    $nick.classList.remove('hidden');
+    $('#nick-input').value = nickname || '';
+  } else {
+    $nick.classList.add('hidden');
+  }
   const now = Date.now();
   const played = GAMES.filter(g => state.disc[g.id].sessions > 0).length;
   const lastPlayed = Math.max(0, ...GAMES.map(g => state.disc[g.id].lastPlayed || 0));
@@ -570,5 +659,35 @@ $('#btn-reset-apply').addEventListener('click', () => {
   say('모든 기록을 지웠습니다.', 'ok');
 });
 
+$('#btn-nick-save').addEventListener('click', () => {
+  const v = $('#nick-input').value.trim().slice(0, 12);
+  setLocalNickname(v);
+  nickname = v || null;
+  say(v ? `별명을 "${v}"로 저장했습니다.` : '별명을 지웠습니다.', 'ok');
+});
+
+// ---------- 플랫폼 (앱인토스) ----------
+$('#btn-leaderboard').addEventListener('click', () => openLeaderboard());
+
+let lastBackAt = 0;
+function handleBack() {
+  const active = document.querySelector('.screen.active');
+  const id = active && active.id;
+  if (id === 'screen-game') { abortGame(); return true; }      // 게임 중 → 홈
+  if (id && id !== 'screen-home') { renderHome(); return true; } // 다른 화면 → 홈
+  // 홈: 두 번 눌러 나가기
+  const now = Date.now();
+  if (now - lastBackAt < 2000) return false;   // 진짜 나간다
+  lastBackAt = now;
+  toast('한 번 더 누르면 종료됩니다');
+  return true;
+}
+
 applyTheme(state.theme);
 renderHome();
+
+initPlatform().then(() => {
+  onBack(handleBack);
+  refreshNickname();
+  if (hasLeaderboard()) $('#btn-leaderboard').classList.remove('hidden');
+});

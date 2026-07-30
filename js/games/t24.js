@@ -127,7 +127,7 @@ export const t24Game = {
         if (left <= 0) {
           clearInterval(tickId); tickId = null;
           ctx.setTimerText('0s');
-          return end(true);
+          return end('time');
         }
         ctx.setTimerText(Math.ceil(left) + 's');
         const $t = document.querySelector('#game-timer');
@@ -154,7 +154,9 @@ export const t24Game = {
       round++;
       // 타임어택: 5문제를 다 풀면 다음 단계 (시간이 줄어든다)
       if (round > ROUNDS) {
-        if (!attack) return end(false);
+        if (!attack) return end();
+        // 5문제를 전부 실제로 풀었을 때만 승급 — "모르겠어요"로는 넘어갈 수 없다
+        if (levelSolved < ROUNDS) return end('skip');
         level++;
         round = 1;
         levelSolved = 0;
@@ -266,18 +268,19 @@ export const t24Game = {
       newRound();
     });
 
-    function end(timeUp) {
+    function end(reason) {
       if (finished) return;
       finished = true;
       if (tickId) { clearInterval(tickId); tickId = null; }
 
       if (attack) {
-        // 타임어택은 시간 초과로만 끝난다. 진행 중이던 단계는 통과하지 못한 것.
+        // 타임어택은 실패로만 끝난다 (시간 초과·못 푼 문제). 진행 중이던 단계는 통과하지 못한 것.
         const passed = level - 1;
+        const why = reason === 'skip' ? '5문제를 다 풀지 못함' : '시간 초과';
         ctx.finish({
           score: passed,
           perf: (passed + 0.6) / 2.2,
-          detail: `${passed}단계 통과 · ${level}단계에서 시간 초과 (${levelSolved}/${ROUNDS}문제)`,
+          detail: `${passed}단계 통과 · ${level}단계에서 ${why} (${levelSolved}/${ROUNDS}문제)`,
           time: passed > 0
             ? { key: 'level_max', value: passed, unit: 'level', label: '타임어택 최고' } : null,
         });
@@ -288,13 +291,14 @@ export const t24Game = {
       const fastest = solveTimes.length ? Math.min(...solveTimes) : null;
       // 5문제를 전부 푼 판만 "전체 최단" 기록으로 인정한다
       const allSolved = solved === ROUNDS;
+      const times = [];
+      if (fastest !== null) times.push({ key: 'time_one', value: fastest, unit: 'sec', label: '한 문제 최단' });
+      if (allSolved) times.push({ key: 'time_all', value: totalSec, unit: 'sec', label: '전체 최단' });
       ctx.finish({
         score: solved,
         perf: solved / 3.2,
         detail: `${solved}/${ROUNDS} 성공${solved ? ` · 평균 ${avg}초` : ''}`,
-        time: allSolved
-          ? { key: 'time_all', value: totalSec, unit: 'sec', label: '전체 최단' }
-          : (fastest !== null ? { key: 'time_one', value: fastest, unit: 'sec', label: '한 문제 최단' } : null),
+        times,
       });
     }
 

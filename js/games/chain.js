@@ -167,7 +167,7 @@ export const chainGame = {
         if (left <= 0) {
           clearInterval(tickId); tickId = null;
           ctx.setTimerText('0s');
-          return end(true);
+          return end('time');
         }
         ctx.setTimerText(Math.ceil(left) + 's');
         const $t = document.querySelector('#game-timer');
@@ -182,7 +182,9 @@ export const chainGame = {
       round++;
       if (round > ROUNDS) {
         // 기본 모드는 여기서 끝. 타임어택은 다음 단계로 올라가며 시간이 줄어든다.
-        if (!attack) return end(false);
+        if (!attack) return end();
+        // 4판을 전부 실제로 뚫었을 때만 승급 — 건너뛰기로는 단계를 넘을 수 없다
+        if (cleared < ROUNDS) return end('skip');
         level++;
         round = 1;
         cleared = 0;
@@ -252,7 +254,7 @@ export const chainGame = {
         $banner.textContent = `틀렸습니다 (실수 ${mistakes}/${MAX_MISTAKES})`;
         $banner.className = 'ch2-banner bad';
         render();
-        if (mistakes >= MAX_MISTAKES) return end();
+        if (mistakes >= MAX_MISTAKES) return end('mistake');
         return;
       }
       grid[sel] = v;
@@ -285,19 +287,21 @@ export const chainGame = {
     // 기본 모드만 흐르는 시계를 쓴다. 타임어택은 단계별 카운트다운이 대신한다.
     const readSec = attack ? null : ctx.stopwatch();
 
-    function end(timeUp) {
+    function end(reason) {
       if (finished) return;
       finished = true;
       if (tickId) { clearInterval(tickId); tickId = null; }
 
       if (attack) {
-        // 타임어택은 실패로만 끝난다 (시간 초과 또는 실수 3회).
+        // 타임어택은 실패로만 끝난다 (시간 초과·실수 3회·못 뚫은 판).
         // 어느 쪽이든 진행 중이던 단계는 통과하지 못한 것이다.
         const passed = level - 1;
+        const why = reason === 'time' ? '시간 초과'
+          : reason === 'skip' ? '4판을 다 뚫지 못함' : '실수 3회';
         ctx.finish({
           score: totalChain,
           perf: (passed + 0.6) / 1.6,
-          detail: `${passed}단계 통과 · ${level}단계에서 ${timeUp ? '시간 초과' : '실수 3회'} · ${totalChain}칸 연쇄`,
+          detail: `${passed}단계 통과 · ${level}단계에서 ${why} · ${totalChain}칸 연쇄`,
           time: passed > 0
             ? { key: 'chain_level', value: passed, unit: 'level', label: '타임어택 최고' } : null,
         });

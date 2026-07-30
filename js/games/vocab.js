@@ -28,7 +28,7 @@ export const vocabGame = {
   run(ctx) {
     const tier = mainTier(ctx.rating);
     const vocabState = ctx.state.vocab; // wordIdx -> {box, due}
-    let correct = 0, wrong = 0, cur = null, locked = false;
+    let correct = 0, wrong = 0, streak = 0, cur = null, locked = false;
 
     // 출제 풀: 복습 예정 단어 우선 + 주력 티어 (아래위 티어 소량 혼합)
     const now = Date.now();
@@ -55,9 +55,18 @@ export const vocabGame = {
     const $s = ctx.body.querySelector('#v-score');
 
     function distractors(word) {
-      // 같은 티어 위주로 오답 3개
-      const sameTier = VOCAB.filter(v => v !== word && Math.abs(v.t - word.t) <= 1);
-      return shuffle(sameTier).slice(0, 3).map(v => v.m);
+      // 같은 티어 위주로 오답 3개.
+      // 뜻 텍스트가 정답이나 서로와 겹치면 선택지가 중복되므로 뜻 기준으로 거른다
+      // (alleviate/mitigate 둘 다 '완화하다' 같은 쌍이 실제로 있다)
+      const seen = new Set([word.m]);
+      const out = [];
+      for (const v of shuffle(VOCAB.filter(v => Math.abs(v.t - word.t) <= 1))) {
+        if (seen.has(v.m)) continue;
+        seen.add(v.m);
+        out.push(v.m);
+        if (out.length === 3) break;
+      }
+      return out;
     }
 
     function updateLeitner(idx, ok) {
@@ -94,19 +103,21 @@ export const vocabGame = {
       locked = true;
       const ok = m === cur.word.m;
       updateLeitner(cur.idx, ok);
+      const scoreHtml = () => `정답 <b>${correct}</b> · 오답 ${wrong}`
+        + (streak >= 3 ? `<span class="combo">🔥 ${streak}연속</span>` : '');
       if (ok) {
-        correct++; sfx.good();
+        correct++; streak++; sfx.combo(streak);
         btn.classList.add('correct');
-        $s.innerHTML = `정답 <b>${correct}</b> · 오답 ${wrong}`;
+        $s.innerHTML = scoreHtml();
         ctx.delay(next, 180);
       } else {
-        wrong++; sfx.bad();
+        wrong++; streak = 0; sfx.bad();
         btn.classList.add('wrong');
         // 정답 표시
         for (const c of $c.children) {
           if (c.textContent === cur.word.m) c.classList.add('correct');
         }
-        $s.innerHTML = `정답 <b>${correct}</b> · 오답 ${wrong}`;
+        $s.innerHTML = scoreHtml();
         ctx.delay(next, 900);
       }
     }

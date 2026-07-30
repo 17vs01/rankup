@@ -36,6 +36,10 @@ export const compassGame = {
     const L = Math.max(0, (ctx.rating - 800) / 150);
     const steps = Math.min(12, 3 + Math.floor(L));
     const showMs = Math.max(700, 1500 - L * 70);
+    // 1단계에서는 지시를 하나씩 보여주고 "확인"을 눌러야 넘어간다.
+    // 처음 하는 사람이 자기 속도로 따라가게. 2단계부터는 자동으로 흐른다.
+    // 시작 레이팅(1000)이 지시 4개라, 4개 이하 = 1단계로 본다.
+    const manual = steps <= 4;
 
     let round = 0, correct = 0;
 
@@ -90,7 +94,11 @@ export const compassGame = {
         if (a === want) return { ...r, ans: a };
         if (!fallback && a !== lastAns) fallback = { ...r, ans: a };
       }
-      return fallback || { ...buildRoute(), ans: 0 };
+      if (fallback) return fallback;
+      // 최후 폴백도 실제 정답을 계산해서 붙인다 (원점 복귀 경로는 다시 뽑는다)
+      let r = buildRoute();
+      while (r.x === 0 && r.y === 0) r = buildRoute();
+      return { ...r, ans: answerIndex(r.x, r.y, r.h) };
     }
 
     // 출발점(0,0)이 현재 진행방향 기준 몇 시 방향인가 → 8방위 인덱스
@@ -217,13 +225,19 @@ export const compassGame = {
       const play = () => {
         if (i >= route.seq.length) return ask(route, ansIdx);
         const s = route.seq[i];
-        $stage.innerHTML = `<div class="cp-icon">${s.icon}</div><div class="cp-instr">${s.text}</div>`;
+        $stage.innerHTML = `<div class="cp-icon">${s.icon}</div><div class="cp-instr">${s.text}</div>`
+          + (manual ? '<button class="cp-next" id="cp-next">확인</button>' : '');
         sfx.tick();
         const pip = document.createElement('span');
         pip.className = 'cp-pip';
         $prog.appendChild(pip);
         i++;
-        ctx.delay(play, showMs);
+        if (manual) {
+          // 자기 속도로 — 머릿속에 그린 다음 직접 넘긴다
+          $stage.querySelector('#cp-next').addEventListener('click', play);
+        } else {
+          ctx.delay(play, showMs);
+        }
       };
       ctx.delay(play, 900);
     }

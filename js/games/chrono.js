@@ -68,6 +68,13 @@ export const chronoGame = {
     let phase = 'ready';   // ready → running → result
     let target = 0, startAt = 0, rafId = null;
 
+    // ✕ 중단 시 가짜 진행바의 rAF 루프까지 세워야 한다.
+    // (main.js의 clearSession은 setTimeout/Interval만 정리한다)
+    ctx.onAbort = () => {
+      phase = 'aborted';
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+
     function setup() {
       round++;
       if (round > ROUNDS) return end();

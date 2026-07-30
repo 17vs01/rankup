@@ -30,7 +30,7 @@ export const korvocabGame = {
     const store = ctx.state.korvocab || (ctx.state.korvocab = {});
     const now = Date.now();
 
-    let correct = 0, wrong = 0, cur = null, locked = false;
+    let correct = 0, wrong = 0, streak = 0, cur = null, locked = false;
     const wrongList = [];   // 이번 판에 틀린 것 — 결과에 보여준다
 
     // 복습 예정 단어 우선, 그다음 주력 난이도
@@ -89,15 +89,16 @@ export const korvocabGame = {
       const ok = m === cur.v.m;
       updateLeitner(cur.idx, ok);
       if (ok) {
-        correct++; sfx.good();
+        correct++; streak++; sfx.combo(streak);
         btn.classList.add('correct');
       } else {
-        wrong++; sfx.bad();
+        wrong++; streak = 0; sfx.bad();
         btn.classList.add('wrong');
         for (const c of $c.children) if (c.textContent === cur.v.m) c.classList.add('correct');
         wrongList.push(cur.v.w);
       }
-      $s.innerHTML = `정답 <b>${correct}</b> · 오답 ${wrong}`;
+      $s.innerHTML = `정답 <b>${correct}</b> · 오답 ${wrong}`
+        + (streak >= 3 ? `<span class="combo">🔥 ${streak}연속</span>` : '');
       // 틀렸을 땐 예문을 보여줘 뜻이 몸에 남게 한다
       if (!ok && cur.v.ex) {
         $ex.textContent = `예: ${cur.v.ex}`;

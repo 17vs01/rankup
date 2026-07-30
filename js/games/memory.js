@@ -1,5 +1,6 @@
 // 순간 기억 (패턴 그리드, 6라운드 적응형)
 // 셀 패턴이 잠깐 켜졌다 꺼지면 위치를 재현. 성공 시 +1칸, 실패 시 -1칸.
+// 최고 칸수가 레벨처럼 기록에 남고, 다음 판은 그 근처에서 시작한다.
 import { sfx } from '../audio.js';
 
 const ROUNDS = 6;
@@ -10,12 +11,18 @@ export const memoryGame = {
   icon: '🧠',
   desc: '순간 패턴 기억 6라운드',
   run(ctx) {
-    // 레이팅 기준 시작 칸수
-    const k0 = Math.max(3, Math.round(4 + (ctx.rating - 800) / 150));
+    // 시작 칸수: 기록이 있으면 최고 기록 바로 아래에서, 없으면 레이팅 기준
+    const d = ctx.state.disc.memory;
+    const bestCells = d.records && d.records.memory_cells;
+    const k0 = bestCells
+      ? Math.max(3, bestCells - 1)
+      : Math.max(3, Math.round(4 + (ctx.rating - 800) / 150));
     let k = k0;
     let round = 0;
     const successKs = [];
     let maxSuccess = 0;
+
+    const elapsed = ctx.stopwatch();   // 흐른 시간 표시 (상단 타이머)
 
     ctx.body.innerHTML = `
       <div class="mem-round" id="mem-round"></div>
@@ -26,11 +33,14 @@ export const memoryGame = {
     const $status = ctx.body.querySelector('#mem-status');
     const $grid = ctx.body.querySelector('#mem-grid');
 
+    // 칸수가 늘면 격자도 커진다. 상한 없이 계속 자란다.
     function gridSizeFor(cells) {
       if (cells <= 5) return 4;
       if (cells <= 8) return 5;
       if (cells <= 12) return 6;
-      return 7;
+      if (cells <= 17) return 7;
+      if (cells <= 23) return 8;
+      return 9;
     }
 
     function startRound() {
@@ -101,12 +111,15 @@ export const memoryGame = {
     }
 
     function end() {
+      const secs = elapsed();
       const ability = maxSuccess > 0 ? maxSuccess : k0 - 1.5;
-      const perf = ability / k0;
+      const perf = ability / Math.max(k0, 4);
       ctx.finish({
         score: maxSuccess,
         perf,
-        detail: `최고 ${maxSuccess}칸 · 성공 ${successKs.length}/${ROUNDS}라운드`,
+        detail: `최고 ${maxSuccess}칸 · 성공 ${successKs.length}/${ROUNDS}라운드 · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`,
+        times: maxSuccess > 0
+          ? [{ key: 'memory_cells', value: maxSuccess, unit: 'cells', label: '최고 칸수' }] : [],
       });
     }
 

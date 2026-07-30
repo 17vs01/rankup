@@ -195,7 +195,13 @@ export const sudokuGame = {
       sfx.good();
       // 같은 숫자를 다 채웠으면 잠깐 강조
       render(); save();
-      if (countLeft() === 0) return end(true);
+      if (isSolved()) return end(true);
+    }
+
+    // 빈 칸 0개만으로는 부족하다 — 오답이 남아 있으면 완성이 아니다
+    function isSolved() {
+      for (let i = 0; i < 81; i++) if (grid[i] !== solution[i]) return false;
+      return true;
     }
 
     $pad.addEventListener('pointerdown', e => {
@@ -234,9 +240,10 @@ export const sudokuGame = {
     ctx.body.querySelector('#sd-hint').addEventListener('pointerdown', e => {
       e.preventDefault();
       if (finished || hintsLeft <= 0) return;
-      // 지금 논리적으로 확정되는 칸을 하나 열어준다 (아무 칸이나 열지 않는다)
+      // 지금 논리적으로 확정되는 칸을 하나 열어준다 (아무 칸이나 열지 않는다).
+      // 사용자의 오답이 섞인 판에서는 싱글이 오답을 가리킬 수 있으니 정답과 대조한다.
       const singles = findSingles(SPEC9, grid);
-      let target = singles.find(s => !grid[s.idx]);
+      let target = singles.find(s => !grid[s.idx] && s.val === solution[s.idx]);
       if (!target) {
         const empty = [];
         for (let i = 0; i < 81; i++) if (!grid[i]) empty.push(i);
@@ -253,7 +260,7 @@ export const sudokuGame = {
       cells[target.idx].classList.add('hinted');
       ctx.delay(() => cells[target.idx].classList.remove('hinted'), 900);
       render(); save();
-      if (countLeft() === 0) end(true);
+      if (isSolved()) end(true);
     });
 
     // ---------- 시간 / 종료 ----------

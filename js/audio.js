@@ -27,6 +27,13 @@ function vibrate(pattern) {
 
 export const sfx = {
   good() { beep(880, 0.07); vibrate(15); },
+  // 연속 정답 — 이어질수록 음이 올라간다 (5연속부터는 화음)
+  combo(n) {
+    const f = Math.min(1568, 880 * Math.pow(1.06, n));
+    beep(f, 0.07);
+    if (n >= 5) setTimeout(() => beep(f * 1.25, 0.06, 'sine', 0.08), 45);
+    vibrate(15);
+  },
   bad() { beep(160, 0.15, 'square', 0.08); vibrate([30, 40, 30]); },
   tick() { beep(660, 0.04, 'sine', 0.06); },
   start() { beep(523, 0.1); setTimeout(() => beep(784, 0.12), 110); },

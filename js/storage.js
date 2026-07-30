@@ -43,15 +43,30 @@ export function loadState() {
   let s;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch { s = null; }
   if (!s || !s.disc) s = freshState();
+  // 예전 저장본·불완전한 백업 파일 모두 여기서 보강한다.
+  // 필드 하나가 빠져도 NaN 오염이나 크래시 없이 새 값으로 채워져야 한다.
+  const num = (v, dflt) => (typeof v === 'number' && Number.isFinite(v) ? v : dflt);
   for (const id of DISC_IDS) {
     if (!s.disc[id]) s.disc[id] = freshDisc();
-    if (!s.disc[id].records) s.disc[id].records = {};   // 예전 저장본 보강
+    const d = s.disc[id];
+    d.rating = num(d.rating, START_RATING);
+    d.peak = Math.max(num(d.peak, d.rating), d.rating);
+    d.lastPlayed = num(d.lastPlayed, 0);
+    d.lastDecay = num(d.lastDecay, 0);
+    d.sessions = num(d.sessions, 0);
+    d.best = num(d.best, 0);
+    if (!d.records || typeof d.records !== 'object') d.records = {};
   }
   if (!s.vocab) s.vocab = {};
+  if (!s.korvocab) s.korvocab = {};
   if (s.sudoku === undefined) s.sudoku = null;
   if (!s.theme) s.theme = 'onyx';
   if (!s.seenRules) s.seenRules = {};
   if (!s.modes) s.modes = {};
+  s.totalSessions = num(s.totalSessions, 0);
+  s.streak = num(s.streak, 0);
+  if (typeof s.lastStreakDay !== 'string') s.lastStreakDay = '';
+  if (!Array.isArray(s.history)) s.history = [];
   return s;
 }
 

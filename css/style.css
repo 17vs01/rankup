@@ -785,6 +785,66 @@ html, body {
 .t24-fb.good { color: var(--good); font-weight: 600; }
 .t24-fb.bad { color: var(--bad); }
 
+/* ---------- 상단 버튼 묶음 · 순위 · 토스트 · 별명 ---------- */
+.top-btns { display: flex; gap: 2px; }
+.rank-btn {
+  width: 100%; margin-top: 16px; padding: 13px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  color: var(--text); font-size: 13.5px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.rank-btn:active { background: var(--surface-2); }
+.toast {
+  position: fixed; left: 50%; bottom: calc(38px + env(safe-area-inset-bottom));
+  transform: translateX(-50%); z-index: 60; white-space: nowrap;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2);
+  border-radius: 999px; padding: 11px 20px; font-size: 13px; font-weight: 600;
+  animation: rise .25s ease;
+}
+.nick-row { display: flex; gap: 8px; align-items: stretch; }
+.nick-input {
+  flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 14px; color: var(--text);
+  font-family: inherit; font-size: 14px;
+}
+.nick-input:focus { outline: none; border-color: var(--accent); }
+.nick-row .btn-line { width: 80px; flex: 0 0 auto; margin: 0; }
+
+/* ---------- 콤보 (연속 정답) ---------- */
+.combo { color: var(--accent); font-weight: 700; margin-left: 8px; }
+
+/* ---------- ⚡ 집중력 · 종목 선택 ---------- */
+.fp-wrap { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 330px; }
+.fp-title { font-size: 13px; font-weight: 600; color: var(--text-dim); text-align: center; }
+.fp-item {
+  width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+  transition: background .12s, border-color .12s;
+}
+.fp-item .fp-check {
+  width: 22px; height: 22px; border-radius: 50%; flex: 0 0 auto;
+  border: 1.5px solid var(--line-2); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: transparent;
+}
+.fp-item.on { border-color: var(--accent); background: var(--accent-soft); }
+.fp-item.on .fp-check { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.fp-name { font-size: 15px; font-weight: 600; }
+.fp-desc { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+.fp-goal {
+  font-size: 12.5px; color: var(--text-dim); text-align: center; line-height: 1.7;
+  word-break: keep-all; padding: 4px 8px;
+}
+.fp-goal b { color: var(--accent); }
+
+/* ---------- 🧭 나침반 · 확인 버튼 ---------- */
+.cp-next {
+  margin-top: 6px; padding: 14px 44px;
+  background: var(--accent); color: var(--on-accent); border: none; border-radius: 12px;
+  font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.cp-next:active { filter: brightness(1.12); }
+
 /* ---------- 좁은 화면 ---------- */
 @media (max-height: 780px) {
   .sd-grid, .sd-pad, .sd-tools, .ch2-skip { max-width: 320px; }
