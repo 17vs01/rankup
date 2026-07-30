@@ -280,8 +280,17 @@ export const compassGame = {
           judge(ctx.body, ok, ok ? '정답' : `정답은 ${DIRS[ansIdx].label}`);
           $stage.innerHTML = `<div class="cp-instr">${ok ? '정답' : `정답은 ${DIRS[ansIdx].label}`}</div>`;
           drawReview(route, ansIdx, c.idx, ok);
-          // 틀렸으면 더 오래 보여준다
-          ctx.delay(startRound, ok ? 2200 : 3800);
+          if (manual) {
+            // 1단계: 정답 공개도 "확인"을 눌러야 넘어간다 — 지도를 충분히 보게
+            const b = document.createElement('button');
+            b.className = 'cp-next';
+            b.textContent = '확인';
+            b.addEventListener('click', startRound, { once: true });
+            $stage.appendChild(b);
+          } else {
+            // 틀렸으면 더 오래 보여준다
+            ctx.delay(startRound, ok ? 2200 : 3800);
+          }
         });
         $rose.appendChild(b);
       });
