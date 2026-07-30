@@ -6,6 +6,7 @@
 //  - 기본: 5문제. 시간 제한 없음. 전체를 푼 총 시간이 기록으로 남는다.
 //  - 타임어택: 단계마다 제한 시간 안에 5문제를 다 풀어야 다음 단계로. 단계가 오를수록 시간이 줄어든다.
 import { sfx } from '../audio.js';
+import { judge } from '../feedback.js';
 
 const ROUNDS = 5;
 const EPS = 1e-6;
@@ -216,11 +217,13 @@ export const t24Game = {
           totalSec += took;
           solveTimes.push(took);
           sfx.good();
+          judge(ctx.body, true, `${target} 완성! (${took.toFixed(1)}초)`);
           $fb.textContent = `성공! ${fmt(tiles[0])} = ${target}  (${took.toFixed(1)}초)`;
           $fb.className = 't24-fb good';
           ctx.delay(newRound, 900);
         } else {
           sfx.bad();
+          judge(ctx.body, false, `목표는 ${target} — 되돌리세요`);
           $fb.textContent = `${fmt(tiles[0])} … 목표는 ${target}. 되돌리세요`;
           $fb.className = 't24-fb bad';
         }

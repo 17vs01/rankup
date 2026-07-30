@@ -2,6 +2,7 @@
 // 셀 패턴이 잠깐 켜졌다 꺼지면 위치를 재현. 성공 시 +1칸, 실패 시 -1칸.
 // 최고 칸수가 레벨처럼 기록에 남고, 다음 판은 그 근처에서 시작한다.
 import { sfx } from '../audio.js';
+import { judge } from '../feedback.js';
 
 const ROUNDS = 6;
 
@@ -97,9 +98,11 @@ export const memoryGame = {
               sfx.good();
               successKs.push(k);
               maxSuccess = Math.max(maxSuccess, k);
+              judge(ctx.body, true, `${k}칸 성공 · +1칸`);
               $status.textContent = '성공! +1칸';
               k++;
             } else {
+              judge(ctx.body, false, `${hits}/${k}칸`);
               $status.textContent = `실패 (${hits}/${k})`;
               k = Math.max(3, k - 1);
             }

@@ -1,6 +1,7 @@
 // 눈대중 — 각도·비율·개수·넓이를 순간 추정
 // 눈금 위를 한 번 탭하면 답 확정. 레벨이 오르면 허용 오차가 조여든다.
 import { sfx } from '../audio.js';
+import { judge } from '../feedback.js';
 
 const ROUNDS = 8;
 const EXPECTED_PER_ROUND = 55;
@@ -199,6 +200,9 @@ export const eyeballGame = {
       else if (cur.flashMs > 0) $canvas.innerHTML = cur.svg;   // 개수 문제는 원본 공개
       $fb.innerHTML = `내 답 <b>${guess}${cur.unit}</b> · 정답 <b>${cur.answer}${cur.unit}</b> · ${pts}점`;
       if (pts >= 70) sfx.good(); else sfx.bad();
+      // 판정을 크게 — 애매한 중간 점수는 눈금 표시가 말해준다
+      if (pts >= 70) judge(ctx.body, true, `${pts}점`);
+      else if (pts === 0) judge(ctx.body, false, `정답 ${cur.answer}${cur.unit}`);
 
       ctx.delay(next, pts >= 70 ? 1500 : 2400);
     });

@@ -6,6 +6,7 @@
 // 그래서 판 하나를 오래 붙드는 대신, 막힌 판을 여러 개 내고 매번 "그 한 칸"을 찾게 한다.
 import { SPEC9, generate, boxOf, findSingles, candidates } from '../sudoku-core.js';
 import { sfx } from '../audio.js';
+import { judge } from '../feedback.js';
 
 const N = 9;
 const ROUNDS = 4;
@@ -224,6 +225,7 @@ export const chainGame = {
           busy = false; roundDone = true;
           totalChain += burst;
           cleared++;
+          judge(ctx.body, true, `연쇄 ${burst}칸 폭발!`);
           $banner.textContent = `연쇄 ${burst}칸 폭발! (${cleared}/${round} 클리어)`;
           $banner.className = 'ch2-banner boom';
           cands = candidates(SPEC9, grid);

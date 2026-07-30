@@ -2,6 +2,7 @@
 // 목표 시간을 보고, 빈 화면에서 그 시각에 탭. 레벨이 오르면 목표가 길어지고
 // 가짜 진행바(엉뚱한 속도로 차오름)가 체감을 흔든다.
 import { sfx } from '../audio.js';
+import { judge } from '../feedback.js';
 
 const ROUNDS = 4;
 const EXPECTED_PER_ROUND = 55;
@@ -127,6 +128,9 @@ export const chronoGame = {
       $hint.textContent = `목표 ${target.toFixed(1)}초 · ${sign}${diff.toFixed(2)}초 · ${pts}점`;
       drawTimeline(target, actual);
       if (pts >= 70) sfx.good(); else sfx.bad();
+      // 판정을 크게 — 잘 맞았거나 완전히 빗나갔을 때만 (애매한 중간은 타임라인이 말해준다)
+      if (pts >= 70) judge(ctx.body, true, `${pts}점`);
+      else if (pts === 0) judge(ctx.body, false, `${sign}${diff.toFixed(2)}초`);
 
       const chip = document.createElement('span');
       chip.className = 'ch-chip ' + (pts >= 70 ? 'good' : pts > 0 ? 'ok' : 'miss');

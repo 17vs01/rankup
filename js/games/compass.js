@@ -5,6 +5,7 @@
 // 답한 뒤에는 걸어온 길을 지도로 되짚어 보여준다. 방향만 알려주면
 // "왜 틀렸는지"를 모르는데, 경로를 보면 어디서 어긋났는지 눈으로 잡힌다.
 import { sfx } from '../audio.js';
+import { judge } from '../feedback.js';
 
 const ROUNDS = 5;
 const EXPECTED = 3.2;
@@ -275,7 +276,8 @@ export const compassGame = {
               if (el.textContent === DIRS[ansIdx].label) el.classList.add('correct');
             });
           }
-          // 걸어온 길을 지도로 되짚어 준다
+          // 판정을 크게 띄우고, 걸어온 길을 지도로 되짚어 준다
+          judge(ctx.body, ok, ok ? '정답' : `정답은 ${DIRS[ansIdx].label}`);
           $stage.innerHTML = `<div class="cp-instr">${ok ? '정답' : `정답은 ${DIRS[ansIdx].label}`}</div>`;
           drawReview(route, ansIdx, c.idx, ok);
           // 틀렸으면 더 오래 보여준다

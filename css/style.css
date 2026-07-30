@@ -810,6 +810,32 @@ html, body {
 .nick-input:focus { outline: none; border-color: var(--accent); }
 .nick-row .btn-line { width: 80px; flex: 0 0 auto; margin: 0; }
 
+/* ---------- 판정 플래시 (정답 ◯ / 오답 ✕) ---------- */
+.judge {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  pointer-events: none;
+  animation: judgePop .95s ease forwards;
+}
+.judge.ok { color: var(--good); }
+.judge.bad { color: var(--bad); }
+.judge-icon {
+  font-size: 88px; font-weight: 700; line-height: 1;
+  text-shadow: 0 0 34px currentColor;
+}
+.judge-text {
+  font-size: 17px; font-weight: 700; letter-spacing: .04em;
+  background: var(--surface); border-radius: 999px; padding: 6px 16px;
+  word-break: keep-all; text-align: center;
+}
+@keyframes judgePop {
+  0%   { opacity: 0; transform: scale(.55); }
+  16%  { opacity: 1; transform: scale(1.1); }
+  30%  { transform: scale(1); }
+  72%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.02); }
+}
+
 /* ---------- 콤보 (연속 정답) ---------- */
 .combo { color: var(--accent); font-weight: 700; margin-left: 8px; }
 
