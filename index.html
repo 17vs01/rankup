@@ -72,8 +72,54 @@
         <span id="list-count"></span>
       </div>
       <div class="list" id="list"></div>
+
+      <!-- 별관: 랭크 밖 -->
+      <div class="list-head annex-head">
+        <span>랭크 밖</span>
+        <span>LP와 무관</span>
+      </div>
+      <button class="annex" id="btn-sudoku">
+        <span class="annex-icon">🔢</span>
+        <span class="annex-main">
+          <span class="annex-name">스도쿠</span>
+          <span class="annex-sub" id="sudoku-sub"></span>
+        </span>
+        <span class="annex-go">→</span>
+      </button>
     </div>
     <div class="scroll-fade" id="scroll-fade"></div>
+  </section>
+
+  <!-- 스도쿠 별관 -->
+  <section id="screen-sudoku" class="screen">
+    <header class="top">
+      <button class="top-btn" id="btn-sudoku-back" aria-label="뒤로">✕</button>
+      <div class="game-title">🔢 스도쿠</div>
+      <button class="top-btn" id="btn-sd-rules" aria-label="게임 방법">방법</button>
+    </header>
+    <div class="scroll" id="sd-scroll">
+      <div class="sd-intro">
+        <div class="sd-intro-title">랭크 밖 종목</div>
+        <p class="sd-intro-desc">LP·랭킹과 무관합니다. 한 단계씩 완성하면 다음 난이도가 열리고, 난이도별 최단 기록이 남습니다.</p>
+        <div class="sd-progress" id="sd-progress"></div>
+      </div>
+
+      <button class="sd-continue hidden" id="sd-continue">
+        <span class="sc-kicker">이어서 하기</span>
+        <span class="sc-desc" id="sd-continue-desc"></span>
+      </button>
+
+      <div class="sd-levels" id="sd-levels"></div>
+
+      <div class="confirm hidden" id="sd-discard">
+        <div class="confirm-title">진행 중인 판을 버릴까요?</div>
+        <div class="confirm-body" id="sd-discard-body"></div>
+        <div class="confirm-btns">
+          <button class="btn-line" id="btn-sd-discard-cancel">취소</button>
+          <button class="btn-line danger" id="btn-sd-discard-ok">새로 시작</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- 게임 -->

@@ -3,11 +3,15 @@ import { START_RATING, pendingDecay } from './rating.js';
 
 const KEY = 'rankup-state-v1';
 
+// 랭크 종목. 스도쿠는 여기 없다 — 랭크 밖 별관이라 LP·부식·리그와 무관하다.
 const DISC_IDS = [
   'math', 'lexi', 'memory', 'focus',
   'unpredict', 'chrono', 'compass', 'eyeball',
-  'sudoku', 't24',
+  't24',
 ];
+
+// 스도쿠 난이도 (별관 해금 순서). sudoku.js의 LEVELS와 이름이 같아야 한다.
+const SUDOKU_ORDER = ['쉬움', '보통', '어려움', '전문가', '마스터', '극한'];
 
 function freshDisc() {
   return {
@@ -29,6 +33,8 @@ function freshState() {
     vocab: {},          // wordIdx -> { box, due } 라이트너 박스 (영어)
     korvocab: {},       // 같은 구조 (한국어)
     sudoku: null,       // 진행 중인 스도쿠 판 (이어하기)
+    // 스도쿠 별관 진행. 랭크와 완전히 분리된 자체 해금·기록.
+    sudokuProg: { unlocked: 1, recs: {}, plays: 0, clears: 0 },
     theme: 'onyx',      // 화면 테마
     seenRules: {},      // gameId -> 1, 방법 화면을 본 종목
     modes: {},          // gameId -> 마지막으로 고른 모드 id
@@ -69,6 +75,38 @@ export function loadState() {
   // 예전 저장본·불완전한 백업 파일 모두 여기서 보강한다.
   // 필드 하나가 빠져도 NaN 오염이나 크래시 없이 새 값으로 채워져야 한다.
   const num = (v, dflt) => (typeof v === 'number' && Number.isFinite(v) ? v : dflt);
+
+  // 이관: 스도쿠를 랭크 종목에서 별관으로 옮긴다.
+  // LP는 버리고(랭크 밖이라 의미가 없다) 난이도별 최단 기록과 판수만 물려받는다.
+  // 이미 깬 난이도는 그대로 해금된 상태로 시작한다.
+  if (!s.sudokuProg || typeof s.sudokuProg !== 'object') {
+    const old = s.disc && s.disc.sudoku;
+    const recs = {};
+    if (old && old.records) {
+      for (const name of SUDOKU_ORDER) {
+        const v = old.records['time_' + name];
+        if (typeof v === 'number' && Number.isFinite(v)) recs[name] = v;
+      }
+    }
+    // 깬 난이도의 다음 단계까지 열어준다 (앞에서부터 연속으로)
+    let unlocked = 1;
+    for (let i = 0; i < SUDOKU_ORDER.length; i++) {
+      if (recs[SUDOKU_ORDER[i]] === undefined) break;
+      unlocked = Math.min(SUDOKU_ORDER.length, i + 2);
+    }
+    s.sudokuProg = {
+      unlocked,
+      recs,
+      plays: old ? num(old.sessions, 0) : 0,
+      clears: Object.keys(recs).length,
+    };
+  }
+  const sp = s.sudokuProg;
+  sp.unlocked = Math.max(1, Math.min(SUDOKU_ORDER.length, num(sp.unlocked, 1)));
+  sp.plays = num(sp.plays, 0);
+  sp.clears = num(sp.clears, 0);
+  if (!sp.recs || typeof sp.recs !== 'object') sp.recs = {};
+  if (s.disc) delete s.disc.sudoku;   // 랭크 목록에서 완전히 뺀다
   for (const id of DISC_IDS) {
     if (!s.disc[id]) s.disc[id] = freshDisc();
     const d = s.disc[id];
@@ -128,6 +166,50 @@ function dayKey(t = Date.now()) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+// 오늘 뭔가 했다고 표시한다. 하루를 건너뛰었어도 보호권(freeze)이 있으면
+// 하나 쓰고 이어간다. 랭크 종목과 스도쿠 별관 양쪽에서 부른다 —
+// 스트릭은 "오늘 앱을 열고 뭔가 했는가"의 지표라 별관도 인정한다.
+export function touchStreak(s) {
+  const today = dayKey();
+  if (s.lastStreakDay === today) return { changed: false, freezeUsed: false };
+  const yesterday = dayKey(Date.now() - 24 * 3600 * 1000);
+  const dayBefore = dayKey(Date.now() - 48 * 3600 * 1000);
+  let freezeUsed = false;
+  if (s.lastStreakDay === yesterday) {
+    s.streak = s.streak + 1;
+  } else if (s.lastStreakDay === dayBefore && (s.freeze || 0) > 0) {
+    s.freeze--;                 // 딱 하루 빠진 것만 메워준다
+    s.streak = s.streak + 1;
+    freezeUsed = true;
+  } else {
+    s.streak = 1;
+  }
+  s.lastStreakDay = today;
+  return { changed: true, freezeUsed };
+}
+
+// 스도쿠 별관 한 판 기록. LP·부식·리그와 무관하고 해금과 최단 기록만 다룬다.
+// 반환: { isNew, prev, unlockedName } — 신기록 여부와 이번에 열린 난이도
+export function recordSudoku(s, levelName, { solved, sec }) {
+  const p = s.sudokuProg;
+  p.plays++;
+  let isNew = false, prev, unlockedName = null;
+  if (solved) {
+    p.clears++;
+    prev = p.recs[levelName];
+    if (prev === undefined || sec < prev) { p.recs[levelName] = sec; isNew = true; }
+    const i = SUDOKU_ORDER.indexOf(levelName);
+    // 깬 난이도의 바로 다음 단계를 연다 (건너뛰기는 없다)
+    if (i >= 0 && i + 1 < SUDOKU_ORDER.length && p.unlocked === i + 1) {
+      p.unlocked = i + 2;
+      unlockedName = SUDOKU_ORDER[i + 1];
+    }
+  }
+  touchStreak(s);
+  saveState(s);
+  return { isNew, prev, unlockedName };
+}
+
 // 세션 종료 기록
 export function recordSession(s, discId, { score, delta, perf }) {
   const d = s.disc[discId];
@@ -141,23 +223,7 @@ export function recordSession(s, discId, { score, delta, perf }) {
   if (score > d.best) d.best = score;
   s.totalSessions++;
 
-  // 스트릭. 하루를 건너뛰었어도 보호권(freeze)이 있으면 하나 쓰고 이어간다.
-  const today = dayKey();
-  let freezeUsed = false;
-  if (s.lastStreakDay !== today) {
-    const yesterday = dayKey(Date.now() - 24 * 3600 * 1000);
-    const dayBefore = dayKey(Date.now() - 48 * 3600 * 1000);
-    if (s.lastStreakDay === yesterday) {
-      s.streak = s.streak + 1;
-    } else if (s.lastStreakDay === dayBefore && (s.freeze || 0) > 0) {
-      s.freeze--;                 // 딱 하루 빠진 것만 메워준다
-      s.streak = s.streak + 1;
-      freezeUsed = true;
-    } else {
-      s.streak = 1;
-    }
-    s.lastStreakDay = today;
-  }
+  const { freezeUsed } = touchStreak(s);
 
   s.history.unshift({
     t: Date.now(), discId, score, delta,

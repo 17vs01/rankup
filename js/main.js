@@ -1,4 +1,4 @@
-import { loadState, saveState, applyDecay, recordSession } from './storage.js';
+import { loadState, saveState, applyDecay, recordSession, recordSudoku } from './storage.js';
 import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.js';
 import { sfx } from './audio.js';
 import { exportState, readBackup, fmtDate } from './backup.js';
@@ -17,11 +17,12 @@ import { unpredictGame } from './games/unpredict.js';
 import { chronoGame } from './games/chrono.js';
 import { compassGame } from './games/compass.js';
 import { eyeballGame } from './games/eyeball.js';
-import { sudokuGame } from './games/sudoku.js';
+import { sudokuGame, SUDOKU_LEVELS } from './games/sudoku.js';
 import { t24Game } from './games/t24.js';
 
+// 랭크 종목. 스도쿠는 여기 없다 — 한 판 5~20분이라 "60초 랭크전"의 LP 경제와
+// 맞지 않아 랭크 밖 별관으로 뺐다 (아래 '스도쿠 별관' 참고).
 const GAMES = [
-  sudokuGame,
   lexiGame, mathGame, memoryGame, focusGame,
   unpredictGame, chronoGame, compassGame, eyeballGame,
   t24Game,
@@ -70,7 +71,6 @@ const nf = n => n.toLocaleString('ko-KR');
 
 // 시간 기록을 가진 종목과 표시 이름
 const TIME_RECORDS = {
-  sudoku:  { unit: 'sec', title: '난이도별 최단 완주', order: ['쉬움', '보통', '어려움', '전문가', '마스터', '극한'].map(n => ['time_' + n, n]) },
   // order 각 행은 [키, 라벨, 단위?]. 단위를 생략하면 spec.unit을 쓴다.
   t24:     { unit: 'sec', title: '내 기록', order: [['time_one', '한 문제 최단'], ['time_all', '5문제 전체 최단'], ['level_max', '타임어택 최고', 'level']] },
   focus:   { unit: 'ms',  title: '최고 기록', order: [['time_reaction', '반응속도'], ['focus_level', '3종목 레벨', 'level']] },
@@ -184,8 +184,7 @@ function renderHome() {
   // 완주했으면 "이어서 하기"로 다음 판을 권한다. 아니면 감춘다.
   const $quick = $('#btn-quick');
   if (doneN >= plan.ids.length) {
-    // 긴 종목은 권하지 않는다 (목록에서 직접 고르는 건 그대로 된다)
-    const urgent = GAMES.slice().filter(g => !g.long).sort((a, b) =>
+    const urgent = GAMES.slice().sort((a, b) =>
       (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
     $('#cta-kicker').textContent = '오늘 몫 완주 · 한 판 더';
     $('#cta-name').textContent = `${urgent.icon}  ${urgent.name}`;
@@ -244,6 +243,15 @@ function renderHome() {
     $list.appendChild(row);
   }
 
+  // ----- 별관: 스도쿠 (랭크 밖) -----
+  const sp = state.sudokuProg;
+  const saved = sudokuSaved();
+  $('#sudoku-sub').textContent = saved
+    ? `이어하기 · ${saved.level} · ${fmtDur(Math.round(saved.elapsed || 0), 'sec')} 경과`
+    : sp.plays === 0
+      ? '9×9 클래식 · 쉬움부터 하나씩 열어가세요'
+      : `${sp.unlocked}/${SUDOKU_LEVELS.length}단계 열림 · ${nf(sp.plays)}판`;
+
   show('#screen-home');
   // 화면을 띄운 뒤에 재야 한다. display:none 상태에서는 높이가 0이라
   // "넘칠 게 없다"고 잘못 판단해 스크롤 신호가 사라진다.
@@ -273,7 +281,6 @@ function pickDaily() {
     if (d.sessions === 0) s += 45;                                  // 아직 안 해봤다
     s += Math.max(0, (avg - d.rating) / 12);                        // 평균보다 뒤처진 만큼
     if (d.lastPlayed) s += Math.min(25, (now - d.lastPlayed) / (12 * 3600 * 1000) * 5);
-    if (g.long) s -= 70;   // 긴 종목은 "3판이면 끝"이라는 약속을 깨뜨린다
     return { id: g.id, s };
   }).sort((a, b) => b.s - a.s);
   return scored.slice(0, DAILY_N).map(x => x.id);
@@ -351,12 +358,13 @@ function clearSession() {
 }
 
 function makeCtx(game) {
-  const d = state.disc[game.id];
+  // 별관(스도쿠)은 랭크 종목이 아니라 state.disc 항목이 없다
+  const d = state.disc[game.id] || null;
   const token = ++sessionToken;   // 지난 세션의 콜백이 끼어드는 것 차단
   let finished = false;
   return {
     body: $('#game-body'),
-    rating: d.rating,
+    rating: d ? d.rating : 1000,
     state,
     // 데일리 챌린지면 모두가 같은 판을 받도록 시드 난수를 쓴다.
     // 게임이 ctx.rng()를 쓰면 자동으로 따라온다 (안 쓰면 평소처럼 무작위).
@@ -415,9 +423,45 @@ function makeCtx(game) {
       if (finished || token !== sessionToken) return;
       finished = true;
       clearSession();
-      endSession(game, result);
+      if (result && result.annex) endAnnex(game, result);
+      else endSession(game, result);
     },
   };
+}
+
+// 카운트다운 후 게임을 띄운다. 랭크 종목과 별관이 함께 쓴다.
+function launch(game, quick, prepare) {
+  clearSession();
+  currentCtx = null;
+  sessionActive = true;
+  currentGame = game;
+  $('#game-timer').textContent = '';
+  $('#game-timer').classList.remove('urgent');
+  const $body = $('#game-body');
+  show('#screen-game');
+
+  // 처음 보는 판은 3초 동안 한 줄 요약을 되새겨주고,
+  // "한 판 더"처럼 이미 흐름을 타고 있을 때는 1초만 끊는다 (quick).
+  let n = quick ? 1 : 3;
+  const rule = RULES[game.id];
+  $body.innerHTML = `<div class="countdown">${n}</div>`
+    + (!quick && rule ? `<div class="countdown-summary">${rule.summary}</div>` : '');
+  sfx.tick();
+  const cd = setInterval(() => {
+    n--;
+    if (n > 0) {
+      $body.querySelector('.countdown').textContent = n;
+      sfx.tick();
+    } else {
+      clearInterval(cd);
+      sfx.start();
+      $body.innerHTML = '';
+      currentCtx = makeCtx(game);
+      if (prepare) prepare(currentCtx);
+      game.run(currentCtx);
+    }
+  }, quick ? 600 : 800);
+  activeTimers.push(cd);
 }
 
 // ---------- 게임 방법 ----------
@@ -436,9 +480,14 @@ function showRules(game) {
   $('#rules-note-sect').classList.toggle('hidden', !r.note);
   if (r.note) $('#rules-note').textContent = r.note;
 
-  // 시간 기록이 있는 종목이면 지금까지의 최단 기록을 함께 보여준다
-  const spec = TIME_RECORDS[game.id];
-  const recs = state.disc[game.id].records || {};
+  // 시간 기록이 있는 종목이면 지금까지의 최단 기록을 함께 보여준다.
+  // 별관(스도쿠)은 state.disc 항목이 없어서 자체 기록을 쓴다.
+  const spec = game.annex
+    ? { unit: 'sec', title: '난이도별 최단 완주', order: SUDOKU_LEVELS.map(l => [l.name, l.name]) }
+    : TIME_RECORDS[game.id];
+  const recs = game.annex
+    ? state.sudokuProg.recs
+    : ((state.disc[game.id] && state.disc[game.id].records) || {});
   const rows = spec ? spec.order.filter(([k]) => recs[k] !== undefined) : [];
   $('#rules-rec-sect').classList.toggle('hidden', rows.length === 0);
   if (rows.length) {
@@ -450,7 +499,12 @@ function showRules(game) {
   // 시작 영역: 픽커(고를 게 있는 종목) > 모드 버튼 > 그냥 시작하기
   const $modes = $('#rules-modes');
   $modes.innerHTML = '';
-  if (game.picker) {
+  if (game.annex) {
+    // 별관은 난이도를 별관 화면에서 고른다
+    $('#btn-rules-start').classList.remove('hidden');
+    $('#btn-rules-start').textContent = '난이도 고르기';
+    $('#btn-rules-start').onclick = renderSudoku;
+  } else if (game.picker) {
     // 카운트다운 앞에서 고르게 한다 — 게임 안에서 고르면 긴장이 끊긴다
     $('#btn-rules-start').classList.add('hidden');
     game.picker(state, $modes, () => { saveState(state); startSession(game, true, false, pendingDaily); });
@@ -470,6 +524,7 @@ function showRules(game) {
     }
   } else {
     $('#btn-rules-start').classList.remove('hidden');
+    $('#btn-rules-start').textContent = '시작하기';
     $('#btn-rules-start').onclick = () => startSession(game, true, false, pendingDaily);
   }
 
@@ -494,40 +549,11 @@ function startSession(game, skipRules = false, quick = false, daily = false) {
     return;
   }
   pendingDaily = false;
-  clearSession();
-  currentCtx = null;
-  sessionActive = true;
-  currentGame = game;
   const modeId = game.modes ? (state.modes[game.id] || game.modes[0].id) : null;
   const modeName = modeId && game.modes.find(m => m.id === modeId);
   $('#game-title').textContent = `${game.icon} ${game.name}`
     + (modeName && modeName.id !== game.modes[0].id ? ` · ${modeName.name}` : '');
-  $('#game-timer').textContent = '';
-  $('#game-timer').classList.remove('urgent');
-  const $body = $('#game-body');
-  show('#screen-game');
-
-  // 카운트다운. 처음 보는 판은 3초 동안 한 줄 요약을 되새겨주고,
-  // "한 판 더"처럼 이미 흐름을 타고 있을 때는 1초만 끊는다 (quick).
-  let n = quick ? 1 : 3;
-  const rule = RULES[game.id];
-  $body.innerHTML = `<div class="countdown">${n}</div>`
-    + (!quick && rule ? `<div class="countdown-summary">${rule.summary}</div>` : '');
-  sfx.tick();
-  const cd = setInterval(() => {
-    n--;
-    if (n > 0) {
-      $body.querySelector('.countdown').textContent = n;
-      sfx.tick();
-    } else {
-      clearInterval(cd);
-      sfx.start();
-      $body.innerHTML = '';
-      currentCtx = makeCtx(game);
-      game.run(currentCtx);
-    }
-  }, quick ? 600 : 800);
-  activeTimers.push(cd);
+  launch(game, quick);
 }
 
 // 시간 표시: ms는 그대로, 초는 60초 넘으면 MM:SS
@@ -597,9 +623,7 @@ function endSession(game, result) {
   const remain = plan.ids.filter(id => !plan.done.includes(id) && id !== game.id);
   const nextGame = remain.length
     ? GAMES.find(g => g.id === remain[0])
-    // 한 판이 긴 종목은 여기서 권하지 않는다 — "한 판 더"의 리듬을 끊는다.
-    // (목록에서 직접 고르는 건 그대로 된다)
-    : GAMES.slice().filter(g => g.id !== game.id && !g.long).sort((a, b) =>
+    : GAMES.slice().filter(g => g.id !== game.id).sort((a, b) =>
       (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
   const nextWhy = remain.length ? '오늘의 훈련' : '가장 오래 쉬었어요';
 
@@ -643,6 +667,141 @@ function endSession(game, result) {
   $('#btn-home').addEventListener('click', renderHome);
   show('#screen-result');
 }
+
+// ---------- 스도쿠 별관 ----------
+// 랭크 밖이다. LP·부식·종합 점수·리그·오늘의 훈련 어디에도 끼지 않는다.
+// 대신 난이도 해금과 난이도별 최단 기록이 자체 진행감을 만든다.
+let pendingLevel = null;   // 진행 중인 판을 버리고 고르려는 난이도
+
+// 받침이 있으면 "을", 없으면 "를". (쉬움을 / 전문가를)
+function eul(word) {
+  const c = word.charCodeAt(word.length - 1) - 0xAC00;
+  const hasBatchim = c >= 0 && c <= 11171 && c % 28 !== 0;
+  return word + (hasBatchim ? '을' : '를');
+}
+
+function sudokuSaved() {
+  const s = state.sudoku;
+  return (s && s.grid && !s.done && s.level) ? s : null;
+}
+
+function renderSudoku() {
+  const p = state.sudokuProg;
+  const saved = sudokuSaved();
+  pendingLevel = null;
+
+  $('#sd-progress').textContent = p.plays === 0
+    ? '난이도를 하나씩 열어가세요'
+    : `${nf(p.plays)}판 · ${p.unlocked}/${SUDOKU_LEVELS.length}단계 열림`;
+
+  // 이어하기 — 진행 중인 판이 있으면 가장 위에서 권한다
+  const $cont = $('#sd-continue');
+  if (saved) {
+    const el = Math.round(saved.elapsed || 0);
+    $('#sd-continue-desc').textContent =
+      `${saved.level} · ${fmtDur(el, 'sec')} 경과 · 실수 ${saved.mistakes || 0}`;
+    $cont.classList.remove('hidden');
+    $cont.onclick = () => startSudoku(saved.level);
+  } else {
+    $cont.classList.add('hidden');
+  }
+
+  const $list = $('#sd-levels');
+  $list.innerHTML = '';
+  SUDOKU_LEVELS.forEach((lv, i) => {
+    const open = i < p.unlocked;
+    const rec = p.recs[lv.name];
+    const b = document.createElement('button');
+    b.className = 'sd-level' + (open ? '' : ' locked');
+    b.innerHTML = `
+      <span class="sl-mark">${open ? (rec !== undefined ? '✓' : '') : '🔒'}</span>
+      <span class="sl-main">
+        <span class="sl-name">${lv.name}</span>
+        <span class="sl-sub">${open
+          ? (rec !== undefined ? `최단 ${fmtDur(rec, 'sec')}` : `단서 ${lv.clues}개 · 첫 도전`)
+          : `${eul(SUDOKU_LEVELS[i - 1].name)} 완성하면 열려요`}</span>
+      </span>`;
+    if (open) {
+      b.addEventListener('click', () => {
+        // 진행 중인 판과 다른 난이도를 고르면 그 판이 사라진다 — 먼저 확인받는다
+        if (saved && saved.level !== lv.name) { askDiscard(lv.name, saved.level); return; }
+        startSudoku(lv.name);
+      });
+    }
+    $list.appendChild(b);
+  });
+
+  $('#sd-discard').classList.add('hidden');
+  $('#sd-scroll').scrollTop = 0;
+  show('#screen-sudoku');
+}
+
+function askDiscard(levelName, savedName) {
+  pendingLevel = levelName;
+  $('#sd-discard-body').textContent =
+    `진행 중인 "${savedName}" 판이 사라집니다. ${levelName}으로 새로 시작할까요?`;
+  $('#sd-discard').classList.remove('hidden');
+}
+
+$('#btn-sd-discard-cancel').addEventListener('click', () => {
+  pendingLevel = null;
+  $('#sd-discard').classList.add('hidden');
+});
+$('#btn-sd-discard-ok').addEventListener('click', () => {
+  if (!pendingLevel) return;
+  const lv = pendingLevel;
+  pendingLevel = null;
+  state.sudoku = null;
+  saveState(state);
+  startSudoku(lv);
+});
+
+function startSudoku(levelName) {
+  if (sessionActive) return;
+  dailyMode = false;
+  $('#game-title').textContent = `🔢 스도쿠 · ${levelName}`;
+  launch(sudokuGame, false, ctx => { ctx.sudokuLevel = levelName; });
+}
+
+// 별관 결과 — LP 대신 시간·실수·해금으로 말한다
+function endAnnex(game, r) {
+  const { isNew, prev, unlockedName } = recordSudoku(state, r.level, r);
+  const p = state.sudokuProg;
+  const best = p.recs[r.level];
+  if (r.solved) sfx.tierup(); else sfx.finish();
+
+  const nextLv = SUDOKU_LEVELS[SUDOKU_LEVELS.findIndex(l => l.name === r.level) + 1];
+  const canNext = nextLv && SUDOKU_LEVELS.indexOf(nextLv) < p.unlocked;
+
+  $('#result-body').innerHTML = `
+    <div class="result-game">스도쿠 · ${r.level}</div>
+    <div class="result-score">${r.solved ? fmtDur(r.sec, 'sec') : '실패'}</div>
+    <div class="result-detail">${r.solved
+      ? `실수 ${r.mistakes}회 · 기준 ${fmtDur(r.expect, 'sec')}`
+      : `실수 3회로 끝났습니다 · ${fmtDur(r.sec, 'sec')} 진행`}</div>
+    ${r.solved && isNew
+      ? `<div class="result-newrecord">⏱ ${r.level} 최단 기록${prev !== undefined ? ` — 이전 ${fmtDur(prev, 'sec')}` : ''}</div>`
+      : (r.solved && best !== undefined ? `<div class="result-best">⏱ ${r.level} 최단 ${fmtDur(best, 'sec')}</div>` : '')}
+    ${unlockedName ? `<div class="result-tierup">🔓 ${unlockedName} 단계가 열렸습니다</div>` : ''}
+    <div class="result-annex">랭크 밖 종목이라 LP는 변하지 않아요</div>
+    <div class="result-buttons">
+      ${canNext ? `<button class="btn-primary" id="btn-sd-next">${nextLv.name} 도전</button>` : ''}
+      <button class="${canNext ? 'btn-secondary' : 'btn-primary'}" id="btn-sd-again">${r.level} 한 판 더</button>
+      <button class="btn-secondary" id="btn-sd-list">난이도 고르기</button>
+      <button class="btn-secondary" id="btn-home">홈으로</button>
+    </div>
+  `;
+  const $n = $('#btn-sd-next');
+  if ($n) $n.addEventListener('click', () => startSudoku(nextLv.name));
+  $('#btn-sd-again').addEventListener('click', () => startSudoku(r.level));
+  $('#btn-sd-list').addEventListener('click', renderSudoku);
+  $('#btn-home').addEventListener('click', renderHome);
+  show('#screen-result');
+}
+
+$('#btn-sudoku').addEventListener('click', renderSudoku);
+$('#btn-sudoku-back').addEventListener('click', renderHome);
+$('#btn-sd-rules').addEventListener('click', () => showRules(sudokuGame));
 
 // ---------- 결과 공유 ----------
 // 문제가 전부 절차 생성이라 "같은 문제"를 자랑할 수는 없지만,
@@ -819,6 +978,20 @@ function renderRecords() {
     }
     sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name} · ${nf(d.sessions)}판</div>
       <div class="stat-rows">${lines.join('')}</div></div>`);
+  }
+  // 별관은 랭크와 섞이지 않게 맨 아래에 따로 둔다
+  const sp = state.sudokuProg;
+  if (sp.plays > 0) {
+    const rows = SUDOKU_LEVELS
+      .filter(l => sp.recs[l.name] !== undefined)
+      .map(l => `<div class="stat-row"><span>${l.name} 최단</span><span>${fmtDur(sp.recs[l.name], 'sec')}</span></div>`);
+    sects.push(`<div class="sect">
+      <div class="sect-head">🔢 스도쿠 · ${nf(sp.plays)}판 <span class="sect-tag">랭크 밖</span></div>
+      <div class="stat-rows">
+        <div class="stat-row"><span>열린 단계</span><span>${sp.unlocked} / ${SUDOKU_LEVELS.length}</span></div>
+        ${rows.join('')}
+      </div>
+    </div>`);
   }
   $sc.innerHTML = sects.join('');
   $sc.scrollTop = 0;
@@ -1005,10 +1178,9 @@ function handleBack() {
 // 오늘의 훈련 첫 판으로 바로 태운다.
 function showIntro() {
   const plan = todayPlan();
-  // 첫 판은 짧고 즉시 이해되는 종목으로 (긴 종목은 첫인상을 망친다)
-  const first = GAMES.find(g => g.id === plan.ids[0] && !g.long)
-    || GAMES.find(g => plan.ids.includes(g.id) && !g.long)
-    || GAMES.find(g => !g.long);
+  const first = GAMES.find(g => g.id === plan.ids[0])
+    || GAMES.find(g => plan.ids.includes(g.id))
+    || GAMES[0];
   $('#btn-intro-start').textContent = `${first.icon} ${first.name} 시작하기`;
   $('#btn-intro-start').onclick = () => {
     state.onboarded = 1;

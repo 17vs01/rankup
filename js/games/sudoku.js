@@ -1,5 +1,9 @@
-// 스도쿠 (9×9 클래식)
+// 스도쿠 (9×9 클래식) — 랭크 밖 별관
 // 실수 3회 제한, 메모, 되돌리기, 힌트 3회, 하이라이트. 중단해도 진행이 남는다.
+//
+// LP·부식·리그와 무관하다. 한 판이 5~20분이라 "60초 랭크전"의 경제와 맞지 않아
+// 따로 뺐다. 대신 난이도 해금과 난이도별 최단 기록이 자체 진행감을 만든다.
+// 난이도는 ctx.sudokuLevel(이름)로 받는다 — 고르는 건 별관 화면의 몫.
 import { SPEC9, generate, boxOf, conflicts, findSingles } from '../sudoku-core.js';
 import { sfx } from '../audio.js';
 
@@ -7,33 +11,24 @@ const N = 9;
 const MAX_MISTAKES = 3;
 const MAX_HINTS = 3;
 
-// 랭크가 오르면 단서가 줄어든다
-const LEVELS = [
-  { name: '쉬움',   clues: 42, min: 0 },
-  { name: '보통',   clues: 36, min: 1100 },
-  { name: '어려움', clues: 32, min: 1300 },
-  { name: '전문가', clues: 29, min: 1550 },
-  { name: '마스터', clues: 27, min: 1800 },
-  { name: '극한',   clues: 25, min: 2100 },
+// 단서가 적을수록 어렵다. 앞에서부터 하나씩 깨야 다음이 열린다.
+export const SUDOKU_LEVELS = [
+  { name: '쉬움',   clues: 42, expect: 300 },
+  { name: '보통',   clues: 36, expect: 420 },
+  { name: '어려움', clues: 32, expect: 540 },
+  { name: '전문가', clues: 29, expect: 660 },
+  { name: '마스터', clues: 27, expect: 780 },
+  { name: '극한',   clues: 25, expect: 900 },
 ];
-
-function levelFor(rating) {
-  let lv = LEVELS[0];
-  for (const l of LEVELS) if (rating >= l.min) lv = l;
-  return lv;
-}
-
-// 기대 소요시간(초). 이보다 빠르면 랭크가 오른다.
-const EXPECTED_SEC = { 쉬움: 300, 보통: 420, 어려움: 540, 전문가: 660, 마스터: 780, 극한: 900 };
 
 export const sudokuGame = {
   id: 'sudoku',
-  long: true,   // 한 판이 5~20분. 오늘의 훈련·첫 판에서는 뒤로 미룬다.
+  annex: true,   // 랭크 밖. GAMES 배열에 넣지 않는다.
   name: '스도쿠',
   icon: '🔢',
   desc: '9×9 클래식 · 이어하기 지원',
   run(ctx) {
-    const level = levelFor(ctx.rating);
+    const level = SUDOKU_LEVELS.find(l => l.name === ctx.sudokuLevel) || SUDOKU_LEVELS[0];
     const store = ctx.state.sudoku;
 
     // 저장된 판이 같은 난이도면 이어서, 아니면 새 판
@@ -275,27 +270,16 @@ export const sudokuGame = {
       if (finished) return;
       finished = true;
       const sec = elapsedBefore + readElapsed();
-      const expect = EXPECTED_SEC[level.name];
-      let perf;
-      if (solved) {
-        // 기대 시간보다 빠를수록 높게. 실수는 감점.
-        perf = (expect / Math.max(30, sec)) * (1 - mistakes * 0.15);
-        perf = Math.max(0.5, Math.min(2.0, perf));
-      } else {
-        perf = 0.35;   // 실수 3회 실패
-      }
       ctx.state.sudoku = null;   // 판은 끝났으니 이어하기 제거
       ctx.persist();
-      const mm = String(Math.floor(sec / 60)).padStart(2, '0');
-      const ss = String(sec % 60).padStart(2, '0');
+      // 별관은 LP가 없다. 결과는 시간·실수·해금으로만 말한다.
       ctx.finish({
-        score: solved ? Math.max(1, Math.round(expect / Math.max(30, sec) * 100)) : 0,
-        perf,
-        detail: solved
-          ? `${level.name} 완성 · ${mm}:${ss} · 실수 ${mistakes}`
-          : `${level.name} 실패 · 실수 ${MAX_MISTAKES}회`,
-        // 난이도별 최단 완주 기록 (쉬움 기록과 극한 기록은 다른 기록)
-        time: solved ? { key: 'time_' + level.name, value: sec, unit: 'sec', label: level.name + ' 완주' } : null,
+        annex: true,
+        solved,
+        level: level.name,
+        sec,
+        mistakes,
+        expect: level.expect,
       });
     }
 

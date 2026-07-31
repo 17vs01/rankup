@@ -685,6 +685,52 @@ html, body {
 .eb-feedback { font-size: 13px; color: var(--text-dim); min-height: 22px; text-align: center; }
 .eb-feedback b { color: var(--text); font-weight: 600; }
 
+/* ---------- 별관 (랭크 밖) ---------- */
+.annex-head { margin-top: 26px; }
+.annex {
+  width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+  background: none; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 15px 16px; display: flex; align-items: center; gap: 14px;
+  transition: background .12s;
+}
+.annex:active { background: var(--surface); }
+.annex-icon { font-size: 19px; width: 24px; text-align: center; flex: 0 0 auto; }
+.annex-main { flex: 1; min-width: 0; }
+.annex-name { font-size: 15px; font-weight: 600; display: block; }
+.annex-sub { font-size: 12.5px; color: var(--text-faint); margin-top: 3px; display: block; word-break: keep-all; }
+.annex-go { flex: 0 0 auto; color: var(--text-faint); font-size: 15px; }
+
+/* 별관 화면 */
+.sd-intro { padding: 6px 0 18px; }
+.sd-intro-title { font-size: 11px; font-weight: 600; letter-spacing: .14em; color: var(--text-faint); margin-bottom: 10px; }
+.sd-intro-desc { font-size: 13.5px; color: var(--text-dim); line-height: 1.7; word-break: keep-all; margin-bottom: 12px; }
+.sd-progress { font-size: 12.5px; color: var(--accent); font-weight: 600; }
+.sd-continue {
+  width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius);
+  padding: 15px 18px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px;
+}
+.sc-kicker { font-size: 11px; font-weight: 700; letter-spacing: .14em; color: var(--accent); }
+.sc-desc { font-size: 14.5px; font-weight: 600; }
+.sd-levels { display: flex; flex-direction: column; gap: 8px; }
+.sd-level {
+  width: 100%; text-align: left; font-family: inherit; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+  transition: background .12s;
+}
+.sd-level:active { background: var(--surface-2); }
+.sd-level.locked { opacity: .5; cursor: default; background: none; }
+.sl-mark { flex: 0 0 auto; width: 20px; text-align: center; font-size: 13px; color: var(--good); }
+.sl-main { flex: 1; min-width: 0; }
+.sl-name { font-size: 15px; font-weight: 600; display: block; }
+.sl-sub { font-size: 12px; color: var(--text-faint); margin-top: 3px; display: block; word-break: keep-all; }
+.result-annex { font-size: 12px; color: var(--text-faint); margin-top: 14px; letter-spacing: .02em; }
+.sect-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--text-faint);
+  border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; margin-left: 6px;
+}
+
 /* ---------- 🔢 스도쿠 ---------- */
 .sd-status {
   display: flex; justify-content: space-between; align-items: center;
