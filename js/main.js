@@ -184,7 +184,8 @@ function renderHome() {
   // 완주했으면 "이어서 하기"로 다음 판을 권한다. 아니면 감춘다.
   const $quick = $('#btn-quick');
   if (doneN >= plan.ids.length) {
-    const urgent = GAMES.slice().sort((a, b) =>
+    // 긴 종목은 권하지 않는다 (목록에서 직접 고르는 건 그대로 된다)
+    const urgent = GAMES.slice().filter(g => !g.long).sort((a, b) =>
       (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
     $('#cta-kicker').textContent = '오늘 몫 완주 · 한 판 더';
     $('#cta-name').textContent = `${urgent.icon}  ${urgent.name}`;
@@ -596,7 +597,9 @@ function endSession(game, result) {
   const remain = plan.ids.filter(id => !plan.done.includes(id) && id !== game.id);
   const nextGame = remain.length
     ? GAMES.find(g => g.id === remain[0])
-    : GAMES.slice().filter(g => g.id !== game.id).sort((a, b) =>
+    // 한 판이 긴 종목은 여기서 권하지 않는다 — "한 판 더"의 리듬을 끊는다.
+    // (목록에서 직접 고르는 건 그대로 된다)
+    : GAMES.slice().filter(g => g.id !== game.id && !g.long).sort((a, b) =>
       (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
   const nextWhy = remain.length ? '오늘의 훈련' : '가장 오래 쉬었어요';
 
