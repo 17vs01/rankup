@@ -685,6 +685,12 @@ html, body {
 .eb-feedback { font-size: 13px; color: var(--text-dim); min-height: 22px; text-align: center; }
 .eb-feedback b { color: var(--text); font-weight: 600; }
 
+/* 섹션 안의 작은 소제목 */
+.sub-head {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .12em; color: var(--text-faint);
+  margin: 18px 0 8px;
+}
+
 /* ---------- 기록 · 선택별(조합별) ---------- */
 .var-head {
   font-size: 10.5px; font-weight: 600; letter-spacing: .12em; color: var(--text-faint);
