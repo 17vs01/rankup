@@ -6,7 +6,7 @@ const KEY = 'rankup-state-v1';
 const DISC_IDS = [
   'math', 'lexi', 'memory', 'focus',
   'unpredict', 'chrono', 'compass', 'eyeball',
-  'sudoku', 'chain', 't24',
+  'sudoku', 't24',
 ];
 
 function freshDisc() {

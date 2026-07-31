@@ -685,7 +685,7 @@ html, body {
 .eb-feedback { font-size: 13px; color: var(--text-dim); min-height: 22px; text-align: center; }
 .eb-feedback b { color: var(--text); font-weight: 600; }
 
-/* ---------- 🔢 스도쿠 (연쇄 스도쿠와 공용) ---------- */
+/* ---------- 🔢 스도쿠 ---------- */
 .sd-status {
   display: flex; justify-content: space-between; align-items: center;
   width: 100%; max-width: 350px; font-size: 12.5px; color: var(--text-faint); letter-spacing: .04em;
@@ -760,10 +760,6 @@ html, body {
 .sd-key.done { opacity: .2; }
 .sd-key-left { position: absolute; bottom: 3px; left: 0; right: 0; font-size: 9px; font-style: normal; color: var(--text-faint); }
 
-.ch2-banner { font-size: 13px; font-weight: 500; color: var(--text-dim); min-height: 20px; text-align: center; word-break: keep-all; }
-.ch2-banner.boom { color: var(--accent); font-size: 16px; font-weight: 700; }
-.ch2-banner.bad { color: var(--bad); }
-.ch2-skip { max-width: 350px; padding: 11px; font-size: 13px; }
 
 /* ---------- 📝 우리말 ---------- */
 .kv-cat {
@@ -987,7 +983,7 @@ html, body {
 
 /* ---------- 좁은 화면 ---------- */
 @media (max-height: 780px) {
-  .sd-grid, .sd-pad, .sd-tools, .ch2-skip { max-width: 320px; }
+  .sd-grid, .sd-pad, .sd-tools { max-width: 320px; }
   .sd-key { padding: 8px 0 11px; }
   .sd-tool span { font-size: 17px; }
   .cb-q { font-size: 22px; min-height: 58px; }

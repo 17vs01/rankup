@@ -18,11 +18,10 @@ import { chronoGame } from './games/chrono.js';
 import { compassGame } from './games/compass.js';
 import { eyeballGame } from './games/eyeball.js';
 import { sudokuGame } from './games/sudoku.js';
-import { chainGame } from './games/chain.js';
 import { t24Game } from './games/t24.js';
 
 const GAMES = [
-  sudokuGame, chainGame,
+  sudokuGame,
   lexiGame, mathGame, memoryGame, focusGame,
   unpredictGame, chronoGame, compassGame, eyeballGame,
   t24Game,
@@ -72,7 +71,6 @@ const nf = n => n.toLocaleString('ko-KR');
 // 시간 기록을 가진 종목과 표시 이름
 const TIME_RECORDS = {
   sudoku:  { unit: 'sec', title: '난이도별 최단 완주', order: ['쉬움', '보통', '어려움', '전문가', '마스터', '극한'].map(n => ['time_' + n, n]) },
-  chain:   { unit: 'sec', title: '내 기록', order: [['time_full', '4판 돌파 최단'], ['chain_level', '타임어택 최고', 'level']] },
   // order 각 행은 [키, 라벨, 단위?]. 단위를 생략하면 spec.unit을 쓴다.
   t24:     { unit: 'sec', title: '내 기록', order: [['time_one', '한 문제 최단'], ['time_all', '5문제 전체 최단'], ['level_max', '타임어택 최고', 'level']] },
   focus:   { unit: 'ms',  title: '최고 기록', order: [['time_reaction', '반응속도'], ['focus_level', '3종목 레벨', 'level']] },

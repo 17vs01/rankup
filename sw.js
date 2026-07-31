@@ -1,5 +1,5 @@
 // 오프라인 캐시 서비스워커
-const CACHE = 'rankup-v15';
+const CACHE = 'rankup-v16';
 const ASSETS = [
   '.',
   'index.html',
@@ -24,7 +24,6 @@ const ASSETS = [
   'js/games/eyeball.js',
   'js/sudoku-core.js',
   'js/games/sudoku.js',
-  'js/games/chain.js',
   'js/data/korvocab.js',
   'js/games/t24.js',
   'manifest.webmanifest',
