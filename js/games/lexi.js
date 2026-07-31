@@ -32,11 +32,22 @@ function readSel(state) {
   return s.length ? s : ['kor', 'eng'];
 }
 
+// 조합 키 — 우리말만 / 영단어만 / 통합은 서로 다른 판이라 기록도 따로 쌓는다
+const LEXI_LABELS = { kor: '우리말만', eng: '영단어만', 'kor+eng': '통합' };
+function keyOf(sel) {
+  return SOURCES.map(s => s.id).filter(id => sel.includes(id)).join('+');
+}
+
 export const lexiGame = {
   id: 'lexi',
   name: '어휘력',
   icon: '📚',
   desc: '우리말·영단어 골라서 또는 섞어서',
+
+  // 고른 조합마다 기록을 따로 쌓는다 (main.js가 읽는 규약)
+  variantKey: state => keyOf(readSel(state)),
+  variantLabel: key => LEXI_LABELS[key] || key,
+  variantOrder: ['kor', 'eng', 'kor+eng'],
 
   // 방법 화면에서 카운트다운 전에 고르게 한다 (focus.js와 같은 규약)
   picker(state, host, onStart) {
@@ -54,10 +65,15 @@ export const lexiGame = {
       </div>
     `;
     const $goal = host.querySelector('#lx-goal');
+    const vars = (state.disc.lexi && state.disc.lexi.variants) || {};
     const update = () => {
-      $goal.textContent = sel.length === 2
+      const what = sel.length === 2
         ? '통합 — 우리말과 영단어가 랜덤으로 섞여 나옵니다'
         : sel[0] === 'kor' ? '우리말만 60초' : '영단어만 60초';
+      // 이 조합의 지난 기록을 보여준다 — 고르기 전에 뭘 깨야 하는지 알게
+      const v = vars[keyOf(sel)];
+      $goal.innerHTML = what
+        + (v && v.plays ? `<br><b>이 조합 최고 ${v.best}</b> · ${v.plays}판` : '<br>이 조합은 아직 기록이 없어요');
     };
     update();
     host.querySelectorAll('.fp-item').forEach(b => {

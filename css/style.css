@@ -685,6 +685,17 @@ html, body {
 .eb-feedback { font-size: 13px; color: var(--text-dim); min-height: 22px; text-align: center; }
 .eb-feedback b { color: var(--text); font-weight: 600; }
 
+/* ---------- 기록 · 선택별(조합별) ---------- */
+.var-head {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .12em; color: var(--text-faint);
+  margin: 16px 0 4px; padding-top: 12px; border-top: 1px solid var(--line);
+}
+.var-row span:last-child { text-align: right; }
+.var-row i {
+  display: block; font-style: normal; font-size: 11px;
+  color: var(--text-faint); margin-top: 2px;
+}
+
 /* ---------- 별관 (랭크 밖) ---------- */
 .annex-head { margin-top: 26px; }
 .annex {

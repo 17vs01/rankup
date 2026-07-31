@@ -22,6 +22,9 @@ function freshDisc() {
     sessions: 0,
     best: 0,      // 종목별 최고 점수
     records: {},  // 최단 시간 기록. key -> 값(초 또는 ms), 낮을수록 좋음
+    // 고르는 종목(어휘력·집중력·모드가 있는 종목)은 조합마다 기록이 따로 쌓인다.
+    // key -> { plays, best, last, lp }
+    variants: {},
   };
 }
 
@@ -117,6 +120,7 @@ export function loadState() {
     d.sessions = num(d.sessions, 0);
     d.best = num(d.best, 0);
     if (!d.records || typeof d.records !== 'object') d.records = {};
+    if (!d.variants || typeof d.variants !== 'object') d.variants = {};
   }
   if (!s.vocab) s.vocab = {};
   if (!s.korvocab) s.korvocab = {};

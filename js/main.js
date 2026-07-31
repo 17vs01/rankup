@@ -573,6 +573,38 @@ function fmtDur(v, unit) {
 // 이 단위는 높을수록 좋은 기록이다 (나머지는 낮을수록)
 const HIGHER_BETTER = new Set(['level', 'cells', 'count']);
 
+// ---------- 조합별 기록 ----------
+// 고를 게 있는 종목은 조합마다 판이 아예 다르다 (우리말만 vs 통합,
+// 24 기본 vs 타임어택). 한 칸에 뭉뚱그리면 최고 점수가 서로 다른 걸 비교하게 된다.
+function variantKeyOf(game) {
+  if (game.variantKey) return game.variantKey(state);
+  if (game.modes) return state.modes[game.id] || game.modes[0].id;
+  return null;
+}
+
+function variantLabelOf(game, key) {
+  if (game.variantLabel) return game.variantLabel(key);
+  if (game.modes) {
+    const m = game.modes.find(x => x.id === key);
+    if (m) return m.name;
+  }
+  return key;
+}
+
+// 표시 순서: 게임이 정한 순서 우선, 나머지는 판수 많은 순
+function variantRows(game, d) {
+  const vars = d.variants || {};
+  const keys = Object.keys(vars).filter(k => vars[k] && vars[k].plays > 0);
+  if (!keys.length) return [];
+  const order = game.variantOrder || (game.modes ? game.modes.map(m => m.id) : []);
+  keys.sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    if (ia !== ib) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    return vars[b].plays - vars[a].plays;
+  });
+  return keys.map(k => ({ key: k, label: variantLabelOf(game, k), ...vars[k] }));
+}
+
 // ---------- 결과 ----------
 function endSession(game, result) {
   const d = state.disc[game.id];
@@ -596,6 +628,21 @@ function endSession(game, result) {
     recLines.push(isNew
       ? `<div class="result-newrecord">${mark} ${t.label} 신기록 — ${fmtDur(t.value, t.unit)}${prev !== undefined ? ` (이전 ${fmtDur(prev, t.unit)})` : ''}</div>`
       : `<div class="result-best">${mark} ${t.label} ${fmtDur(t.value, t.unit)} · 기록 ${fmtDur(d.records[t.key], t.unit)}</div>`);
+  }
+
+  // 조합별 기록 — 이 조합에서의 최고 점수·판수·누적 LP를 따로 쌓는다.
+  // recordSession이 저장하기 전에 반영해야 함께 저장된다.
+  const vKey = variantKeyOf(game);
+  let vBest = false, vRec = null;
+  if (vKey) {
+    if (!d.variants) d.variants = {};
+    const v = d.variants[vKey] || (d.variants[vKey] = { plays: 0, best: 0, last: 0, lp: 0 });
+    v.plays++;
+    v.last = result.score;
+    v.lp += delta;
+    // 첫 판은 무조건 최고가 되므로 트로피는 두 번째 판부터
+    if (result.score > v.best) { vBest = v.plays > 1; v.best = result.score; }
+    vRec = v;
   }
 
   const { newRecord } = recordSession(state, game.id, { score: result.score, delta, perf: result.perf });
@@ -638,6 +685,10 @@ function endSession(game, result) {
     <div class="result-detail">${result.detail}</div>
     ${recLines.join('')}
     ${newRecord ? '<div class="result-newrecord">자기 최고 점수</div>' : ''}
+    ${vRec && !newRecord && vBest
+      ? `<div class="result-newrecord">🏅 ${variantLabelOf(game, vKey)} 최고 점수</div>`
+      : (vRec && vRec.plays > 1
+        ? `<div class="result-best">${variantLabelOf(game, vKey)} 최고 ${nf(vRec.best)} · ${nf(vRec.plays)}판</div>` : '')}
     <div class="result-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP</div>
     <div class="result-tier" style="color:${afterTier.color}">${afterTier.name} · ${nf(after)}</div>
     <div class="result-bar"><i style="width:${tierProgress(after) * 100}%;background:${afterTier.color}"></i></div>
@@ -976,8 +1027,17 @@ function renderRecords() {
         lines.push(`<div class="stat-row"><span>${label}</span><span>${fmtDur(d.records[key], unit || spec.unit)}</span></div>`);
       }
     }
+    // 고를 게 있는 종목은 조합마다 따로 (우리말만 / 영단어만 / 통합 …)
+    const vrows = variantRows(g, d);
+    const vHtml = vrows.length ? `
+      <div class="var-head">선택별 기록</div>
+      <div class="stat-rows">${vrows.map(v => `
+        <div class="stat-row var-row">
+          <span>${v.label}</span>
+          <span>최고 ${nf(v.best)}<i>${nf(v.plays)}판 · ${v.lp >= 0 ? '+' : '−'}${nf(Math.abs(v.lp))} LP</i></span>
+        </div>`).join('')}</div>` : '';
     sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name} · ${nf(d.sessions)}판</div>
-      <div class="stat-rows">${lines.join('')}</div></div>`);
+      <div class="stat-rows">${lines.join('')}</div>${vHtml}</div>`);
   }
   // 별관은 랭크와 섞이지 않게 맨 아래에 따로 둔다
   const sp = state.sudokuProg;

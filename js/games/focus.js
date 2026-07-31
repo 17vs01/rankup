@@ -33,11 +33,26 @@ function readSel(state) {
   return s.length ? s : STAGES.map(x => x.id);
 }
 
+// 조합 키 — 고른 종목이 다르면 판 자체가 달라서 기록도 따로 쌓는다
+function keyOf(sel) {
+  return STAGES.map(s => s.id).filter(id => sel.includes(id)).join('+');
+}
+
+function labelOf(key) {
+  const ids = String(key).split('+');
+  if (ids.length === STAGES.length) return '3종목 전체';
+  return STAGES.filter(s => ids.includes(s.id)).map(s => s.name).join(' · ');
+}
+
 export const focusGame = {
   id: 'focus',
   name: '집중력',
   icon: '⚡',
   desc: '반응속도 + 스트룹 + 고/노고',
+
+  // 고른 조합마다 기록을 따로 쌓는다 (main.js가 읽는 규약)
+  variantKey: state => keyOf(readSel(state)),
+  variantLabel: labelOf,
 
   // 방법 화면에서 카운트다운 전에 고르게 한다 (게임 안에서 고르면 긴장이 끊긴다).
   // host = 붙일 DOM, onStart = 고르고 나서 부를 함수.
@@ -59,14 +74,20 @@ export const focusGame = {
       </div>
     `;
     const $goal = host.querySelector('#fp-goal');
+    const vars = (state.disc.focus && state.disc.focus.variants) || {};
     const update = () => {
+      let html;
       if (sel.length === 3) {
-        $goal.innerHTML = `3종목 모두 통과하면 레벨업 — 지금 <b>${level}</b>단계<br>`
+        html = `3종목 모두 통과하면 레벨업 — 지금 <b>${level}</b>단계<br>`
           + `기준: 반응 ≤ ${goal.reaction}ms · 스트룹 ≥ ${goal.stroop} · 고/노고 ≥ ${goal.gonogo}`;
       } else {
         const reps = sel.length === 1 ? 5 : 3;
-        $goal.textContent = `${sel.length}종목 집중 단련 — 각 ${reps}판`;
+        html = `${sel.length}종목 집중 단련 — 각 ${reps}판`;
       }
+      // 이 조합의 지난 기록을 보여준다 — 고르기 전에 뭘 깨야 하는지 알게
+      const v = vars[keyOf(sel)];
+      $goal.innerHTML = html
+        + (v && v.plays ? `<br><b>이 조합 최고 ${v.best}</b> · ${v.plays}판` : '<br>이 조합은 아직 기록이 없어요');
     };
     update();
     host.querySelectorAll('.fp-item').forEach(b => {
