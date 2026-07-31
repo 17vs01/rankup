@@ -1,4 +1,6 @@
-import { loadState, saveState, applyDecay, recordSession, recordSudoku } from './storage.js';
+import {
+  loadState, saveState, applyDecay, recordSession, recordSudoku, getVariant,
+} from './storage.js';
 import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.js';
 import { sfx } from './audio.js';
 import { exportState, readBackup, fmtDate } from './backup.js';
@@ -360,11 +362,14 @@ function clearSession() {
 function makeCtx(game) {
   // 별관(스도쿠)은 랭크 종목이 아니라 state.disc 항목이 없다
   const d = state.disc[game.id] || null;
+  // 난이도는 "이번에 고른 조합"의 실력을 따라간다.
+  // 통합만 파고들었다고 "우리말만"까지 어려워지면 안 된다.
+  const v = d ? getVariant(d, variantKeyOf(game)) : null;
   const token = ++sessionToken;   // 지난 세션의 콜백이 끼어드는 것 차단
   let finished = false;
   return {
     body: $('#game-body'),
-    rating: d ? d.rating : 1000,
+    rating: v ? v.rating : 1000,
     state,
     // 데일리 챌린지면 모두가 같은 판을 받도록 시드 난수를 쓴다.
     // 게임이 ctx.rng()를 쓰면 자동으로 따라온다 (안 쓰면 평소처럼 무작위).
@@ -594,13 +599,13 @@ function variantLabelOf(game, key) {
 // 표시 순서: 게임이 정한 순서 우선, 나머지는 판수 많은 순
 function variantRows(game, d) {
   const vars = d.variants || {};
-  const keys = Object.keys(vars).filter(k => vars[k] && vars[k].plays > 0);
+  const keys = Object.keys(vars).filter(k => vars[k] && vars[k].sessions > 0);
   if (!keys.length) return [];
   const order = game.variantOrder || (game.modes ? game.modes.map(m => m.id) : []);
   keys.sort((a, b) => {
     const ia = order.indexOf(a), ib = order.indexOf(b);
     if (ia !== ib) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    return vars[b].plays - vars[a].plays;
+    return vars[b].sessions - vars[a].sessions;
   });
   return keys.map(k => ({ key: k, label: variantLabelOf(game, k), ...vars[k] }));
 }
@@ -608,7 +613,10 @@ function variantRows(game, d) {
 // ---------- 결과 ----------
 function endSession(game, result) {
   const d = state.disc[game.id];
-  const before = d.rating;
+  // 레이팅은 이번에 고른 조합의 것이다 (조합마다 독립)
+  const vKey = variantKeyOf(game);
+  const vLabel = vKey ? variantLabelOf(game, vKey) : null;
+  const before = getVariant(d, vKey).rating;
   const beforeTier = tierOf(before);
   const delta = ratingDelta(result.perf);
 
@@ -630,22 +638,8 @@ function endSession(game, result) {
       : `<div class="result-best">${mark} ${t.label} ${fmtDur(t.value, t.unit)} · 기록 ${fmtDur(d.records[t.key], t.unit)}</div>`);
   }
 
-  // 조합별 기록 — 이 조합에서의 최고 점수·판수·누적 LP를 따로 쌓는다.
-  // recordSession이 저장하기 전에 반영해야 함께 저장된다.
-  const vKey = variantKeyOf(game);
-  let vBest = false, vRec = null;
-  if (vKey) {
-    if (!d.variants) d.variants = {};
-    const v = d.variants[vKey] || (d.variants[vKey] = { plays: 0, best: 0, last: 0, lp: 0 });
-    v.plays++;
-    v.last = result.score;
-    v.lp += delta;
-    // 첫 판은 무조건 최고가 되므로 트로피는 두 번째 판부터
-    if (result.score > v.best) { vBest = v.plays > 1; v.best = result.score; }
-    vRec = v;
-  }
-
-  const { newRecord } = recordSession(state, game.id, { score: result.score, delta, perf: result.perf });
+  const { newRecord, variant } = recordSession(state, game.id, vKey,
+    { score: result.score, delta, perf: result.perf });
 
   // 오늘의 훈련 진행 + 주간 획득 LP + 오늘의 도전 완료 표시
   const justFinishedDaily = markDaily(game.id);
@@ -657,7 +651,7 @@ function endSession(game, result) {
 
   // 토스 안이면 이번 주 점수를 리더보드에 올린다 (실패해도 조용히 넘어간다)
   if (inToss()) submitScore(weeklyScore());
-  const after = d.rating;
+  const after = variant.rating;
   const afterTier = tierOf(after);
   const tierUp = afterTier.idx > beforeTier.idx;
   const tierDown = afterTier.idx < beforeTier.idx;
@@ -680,15 +674,13 @@ function endSession(game, result) {
 
   const $r = $('#result-body');
   $r.innerHTML = `
-    <div class="result-game">${game.name}</div>
+    <div class="result-game">${game.name}${vLabel ? ` · ${vLabel}` : ''}</div>
     <div class="result-score">${nf(result.score)}</div>
     <div class="result-detail">${result.detail}</div>
     ${recLines.join('')}
-    ${newRecord ? '<div class="result-newrecord">자기 최고 점수</div>' : ''}
-    ${vRec && !newRecord && vBest
-      ? `<div class="result-newrecord">🏅 ${variantLabelOf(game, vKey)} 최고 점수</div>`
-      : (vRec && vRec.plays > 1
-        ? `<div class="result-best">${variantLabelOf(game, vKey)} 최고 ${nf(vRec.best)} · ${nf(vRec.plays)}판</div>` : '')}
+    ${newRecord ? `<div class="result-newrecord">${vLabel ? `🏅 ${vLabel} ` : ''}자기 최고 점수</div>` : ''}
+    ${!newRecord && variant.sessions > 1
+      ? `<div class="result-best">${vLabel ? vLabel + ' ' : ''}최고 ${nf(variant.best)} · ${nf(variant.sessions)}판</div>` : ''}
     <div class="result-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP</div>
     <div class="result-tier" style="color:${afterTier.color}">${afterTier.name} · ${nf(after)}</div>
     <div class="result-bar"><i style="width:${tierProgress(after) * 100}%;background:${afterTier.color}"></i></div>
@@ -1016,8 +1008,9 @@ function renderRecords() {
     if (d.sessions === 0) continue;
     const t = tierOf(d.rating);
     const recent = state.history.find(h => h.discId === g.id);
+    const vrowsAll = variantRows(g, d);
     const lines = [
-      `<div class="stat-row"><span>레이팅</span><span style="color:${t.color}">${t.name} · ${nf(d.rating)}</span></div>`,
+      `<div class="stat-row"><span>레이팅${vrowsAll.length > 1 ? ' (조합 평균)' : ''}</span><span style="color:${t.color}">${t.name} · ${nf(d.rating)}</span></div>`,
       `<div class="stat-row"><span>최고 점수</span><span>${nf(d.best)}</span></div>`,
     ];
     if (recent) lines.push(`<div class="stat-row"><span>최근 점수</span><span>${nf(recent.score)}</span></div>`);
@@ -1027,15 +1020,17 @@ function renderRecords() {
         lines.push(`<div class="stat-row"><span>${label}</span><span>${fmtDur(d.records[key], unit || spec.unit)}</span></div>`);
       }
     }
-    // 고를 게 있는 종목은 조합마다 따로 (우리말만 / 영단어만 / 통합 …)
-    const vrows = variantRows(g, d);
-    const vHtml = vrows.length ? `
-      <div class="var-head">선택별 기록</div>
-      <div class="stat-rows">${vrows.map(v => `
-        <div class="stat-row var-row">
+    // 고를 게 있는 종목은 조합마다 레이팅부터 따로다 (우리말만 / 영단어만 / 통합 …)
+    const vrows = vrowsAll;
+    const vHtml = (vrows.length > 1 || (vrows.length === 1 && vrows[0].key)) ? `
+      <div class="var-head">선택별 레이팅 · 기록</div>
+      <div class="stat-rows">${vrows.map(v => {
+        const vt = tierOf(v.rating);
+        return `<div class="stat-row var-row">
           <span>${v.label}</span>
-          <span>최고 ${nf(v.best)}<i>${nf(v.plays)}판 · ${v.lp >= 0 ? '+' : '−'}${nf(Math.abs(v.lp))} LP</i></span>
-        </div>`).join('')}</div>` : '';
+          <span style="color:${vt.color}">${vt.name} · ${nf(v.rating)}<i>최고 ${nf(v.best)} · ${nf(v.sessions)}판</i></span>
+        </div>`;
+      }).join('')}</div>` : '';
     sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name} · ${nf(d.sessions)}판</div>
       <div class="stat-rows">${lines.join('')}</div>${vHtml}</div>`);
   }

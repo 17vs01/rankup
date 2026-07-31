@@ -13,6 +13,23 @@ const DISC_IDS = [
 // 스도쿠 난이도 (별관 해금 순서). sudoku.js의 LEVELS와 이름이 같아야 한다.
 const SUDOKU_ORDER = ['쉬움', '보통', '어려움', '전문가', '마스터', '극한'];
 
+// 레이팅은 조합(variant) 단위로 산다.
+// 어휘력의 "우리말만"과 "통합"은 판이 아예 달라서 실력도 따로 재야 한다.
+// 고를 게 없는 종목은 기본 조합('') 하나만 갖는다.
+export function freshVariant() {
+  return {
+    rating: START_RATING,
+    peak: START_RATING,
+    lastPlayed: 0,
+    lastDecay: 0,
+    sessions: 0,
+    best: 0,     // 이 조합 최고 점수
+    last: 0,     // 이 조합 최근 점수
+    lp: 0,       // 이 조합에서 딴 누적 LP
+  };
+}
+
+// 종목(disc)의 값들은 조합에서 파생된다 — 홈 목록·종합 평균·오늘의 훈련용.
 function freshDisc() {
   return {
     rating: START_RATING,
@@ -20,12 +37,31 @@ function freshDisc() {
     lastPlayed: 0,
     lastDecay: 0,
     sessions: 0,
-    best: 0,      // 종목별 최고 점수
+    best: 0,      // 종목 전체 최고 점수 (조합 중 가장 높은 값)
     records: {},  // 최단 시간 기록. key -> 값(초 또는 ms), 낮을수록 좋음
-    // 고르는 종목(어휘력·집중력·모드가 있는 종목)은 조합마다 기록이 따로 쌓인다.
-    // key -> { plays, best, last, lp }
-    variants: {},
+    variants: {}, // 조합 key -> freshVariant()
   };
+}
+
+/** 조합을 꺼낸다. 없으면 만든다. */
+export function getVariant(d, key) {
+  if (!d.variants) d.variants = {};
+  const k = key || '';
+  if (!d.variants[k]) d.variants[k] = freshVariant();
+  return d.variants[k];
+}
+
+/** 조합들로부터 종목 값을 다시 계산한다. 레이팅은 판수 가중 평균. */
+export function recomputeDisc(d) {
+  const vs = Object.values(d.variants || {}).filter(v => v.sessions > 0);
+  if (!vs.length) return;
+  const total = vs.reduce((a, v) => a + v.sessions, 0);
+  // 가중 평균이라 새 조합을 한 판 해봤다고 종목 레이팅이 훅 떨어지지 않는다
+  d.rating = Math.round(vs.reduce((a, v) => a + v.rating * v.sessions, 0) / total);
+  d.peak = Math.max(d.peak || 0, ...vs.map(v => v.peak || 0));
+  d.lastPlayed = Math.max(0, ...vs.map(v => v.lastPlayed || 0));
+  d.sessions = total;
+  d.best = Math.max(0, ...vs.map(v => v.best || 0));
 }
 
 function freshState() {
@@ -121,6 +157,57 @@ export function loadState() {
     d.best = num(d.best, 0);
     if (!d.records || typeof d.records !== 'object') d.records = {};
     if (!d.variants || typeof d.variants !== 'object') d.variants = {};
+
+    // 이관: 레이팅을 종목에서 조합으로 내린다.
+    // ① 조합 기록만 있던 저장본(plays/best/last/lp)은 종목 레이팅을 시작점으로 물려받는다.
+    // ② 조합이 아예 없던 저장본은 기본 조합('') 하나로 옮긴다.
+    const vals = Object.values(d.variants);
+    const needsMigrate = vals.length > 0 && vals.some(v => v && typeof v.rating !== 'number');
+    if (needsMigrate) {
+      for (const [k, v] of Object.entries(d.variants)) {
+        const plays = num(v && v.plays, 0);
+        d.variants[k] = {
+          ...freshVariant(),
+          // 조합별 실력을 따로 잰 적이 없으니 종목 레이팅에서 함께 출발한다
+          rating: d.rating, peak: d.peak,
+          lastPlayed: plays > 0 ? d.lastPlayed : 0,
+          lastDecay: plays > 0 ? d.lastDecay : 0,
+          sessions: plays,
+          best: num(v && v.best, 0),
+          last: num(v && v.last, 0),
+          lp: num(v && v.lp, 0),
+        };
+      }
+      // 조합에 안 잡힌 지난 판들은 기본 조합으로 몰아둔다
+      const counted = Object.values(d.variants).reduce((a, v) => a + v.sessions, 0);
+      if (d.sessions > counted) {
+        d.variants[''] = {
+          ...freshVariant(),
+          rating: d.rating, peak: d.peak,
+          lastPlayed: d.lastPlayed, lastDecay: d.lastDecay,
+          sessions: d.sessions - counted, best: d.best,
+        };
+      }
+    } else if (!vals.length && d.sessions > 0) {
+      d.variants[''] = {
+        ...freshVariant(),
+        rating: d.rating, peak: d.peak,
+        lastPlayed: d.lastPlayed, lastDecay: d.lastDecay,
+        sessions: d.sessions, best: d.best,
+      };
+    }
+    // 필드가 깨진 조합 보강
+    for (const v of Object.values(d.variants)) {
+      v.rating = num(v.rating, START_RATING);
+      v.peak = Math.max(num(v.peak, v.rating), v.rating);
+      v.lastPlayed = num(v.lastPlayed, 0);
+      v.lastDecay = num(v.lastDecay, 0);
+      v.sessions = num(v.sessions, 0);
+      v.best = num(v.best, 0);
+      v.last = num(v.last, 0);
+      v.lp = num(v.lp, 0);
+    }
+    recomputeDisc(d);
   }
   if (!s.vocab) s.vocab = {};
   if (!s.korvocab) s.korvocab = {};
@@ -146,19 +233,28 @@ export function saveState(s) {
   localStorage.setItem(KEY, JSON.stringify(s));
 }
 
-// 부식을 지연 적용하고 적용된 총량 반환
+// 부식을 지연 적용하고 적용된 총량 반환.
+// 조합마다 따로 썩는다 — 통합만 계속 하면 "우리말만"이 조용히 줄어든다.
 export function applyDecay(s) {
   const now = Date.now();
   let total = 0;
   const details = [];
   for (const id of DISC_IDS) {
     const d = s.disc[id];
-    const loss = pendingDecay(d, now);
-    if (loss > 0) {
-      d.rating -= loss;
-      d.lastDecay = now;
-      total += loss;
-      details.push({ id, loss });
+    let discLoss = 0;
+    for (const v of Object.values(d.variants || {})) {
+      if (!v.sessions) continue;
+      const loss = pendingDecay(v, now);
+      if (loss > 0) {
+        v.rating -= loss;
+        v.lastDecay = now;
+        discLoss += loss;
+      }
+    }
+    if (discLoss > 0) {
+      recomputeDisc(d);
+      total += discLoss;
+      details.push({ id, loss: discLoss });
     }
   }
   if (total > 0) saveState(s);
@@ -214,27 +310,31 @@ export function recordSudoku(s, levelName, { solved, sec }) {
   return { isNew, prev, unlockedName };
 }
 
-// 세션 종료 기록
-export function recordSession(s, discId, { score, delta, perf }) {
+// 세션 종료 기록. 레이팅은 이번에 고른 조합(variantKey)에만 붙는다.
+export function recordSession(s, discId, variantKey, { score, delta, perf }) {
   const d = s.disc[discId];
-  d.rating = Math.max(600, d.rating + delta);
-  d.peak = Math.max(d.peak, d.rating);
-  d.lastPlayed = Date.now();
-  d.lastDecay = 0;
-  d.sessions++;
+  const v = getVariant(d, variantKey);
+  v.rating = Math.max(600, v.rating + delta);
+  v.peak = Math.max(v.peak, v.rating);
+  v.lastPlayed = Date.now();
+  v.lastDecay = 0;
+  v.sessions++;
+  v.last = score;
+  v.lp += delta;
   // 첫 판은 무조건 최고기록이 되므로 트로피는 두 번째 판부터
-  const newRecord = score > d.best && d.sessions > 1;
-  if (score > d.best) d.best = score;
+  const newRecord = score > v.best && v.sessions > 1;
+  if (score > v.best) v.best = score;
+  recomputeDisc(d);
   s.totalSessions++;
 
   const { freezeUsed } = touchStreak(s);
 
   s.history.unshift({
-    t: Date.now(), discId, score, delta,
+    t: Date.now(), discId, vk: variantKey || '', score, delta,
     perf: Math.round(perf * 100) / 100,
-    r: d.rating,   // 그때의 레이팅 — 주간 추이 그래프용
+    r: v.rating,   // 그때의 조합 레이팅 — 주간 추이 그래프용
   });
   if (s.history.length > 120) s.history.length = 120;
   saveState(s);
-  return { newRecord, freezeUsed };
+  return { newRecord, freezeUsed, variant: v };
 }

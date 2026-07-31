@@ -84,10 +84,12 @@ export const focusGame = {
         const reps = sel.length === 1 ? 5 : 3;
         html = `${sel.length}종목 집중 단련 — 각 ${reps}판`;
       }
-      // 이 조합의 지난 기록을 보여준다 — 고르기 전에 뭘 깨야 하는지 알게
+      // 조합마다 레이팅이 따로다 — 고르기 전에 내 실력과 기록을 보여준다
       const v = vars[keyOf(sel)];
       $goal.innerHTML = html
-        + (v && v.plays ? `<br><b>이 조합 최고 ${v.best}</b> · ${v.plays}판` : '<br>이 조합은 아직 기록이 없어요');
+        + (v && v.sessions
+          ? `<br><b>이 조합 ${v.rating} LP</b> · 최고 ${v.best} · ${v.sessions}판`
+          : '<br>이 조합은 아직 기록이 없어요 · 1000 LP에서 시작');
     };
     update();
     host.querySelectorAll('.fp-item').forEach(b => {
