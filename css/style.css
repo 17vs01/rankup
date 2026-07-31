@@ -196,6 +196,84 @@ html, body {
 .cta-kicker { font-size: 11px; font-weight: 600; letter-spacing: .14em; color: var(--accent); }
 .cta-name { font-size: 17px; font-weight: 600; }
 
+/* ---------- 홈 · 오늘의 훈련 ---------- */
+.daily { margin-bottom: 26px; }
+.daily-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11px; font-weight: 600; letter-spacing: .12em;
+  color: var(--text-faint); padding-bottom: 9px;
+}
+.daily-title { color: var(--accent); }
+.daily-count.done { color: var(--good); }
+.daily-list { display: flex; flex-direction: column; gap: 8px; }
+.daily-item {
+  width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
+  padding: 13px 15px; display: flex; align-items: center; gap: 12px;
+  transition: background .12s, opacity .2s;
+}
+.daily-item:active { background: var(--surface-2); }
+.daily-item.done { opacity: .5; }
+.di-check {
+  width: 20px; height: 20px; border-radius: 50%; flex: 0 0 auto;
+  border: 1.5px solid var(--line-2); display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--on-accent);
+}
+.daily-item.done .di-check { background: var(--good); border-color: var(--good); }
+.di-icon { font-size: 19px; flex: 0 0 auto; }
+.di-main { flex: 1; min-width: 0; }
+.di-name { font-size: 14.5px; font-weight: 600; display: block; }
+.di-why { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; display: block; word-break: keep-all; }
+.daily .cta { margin-top: 10px; margin-bottom: 0; }
+
+/* 오늘의 도전 (날짜 시드 · 전 유저 동일 문제) */
+.challenge {
+  width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+  margin-top: 10px; padding: 13px 16px; position: relative;
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 13px;
+  display: flex; flex-direction: column; gap: 3px;
+  transition: opacity .2s;
+}
+.challenge.done { opacity: .55; }
+.challenge::after {
+  content: '→'; position: absolute; right: 16px; top: 50%;
+  transform: translateY(-50%); color: var(--accent); font-size: 15px;
+}
+.ch-badge { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; color: var(--accent); }
+.ch-name { font-size: 15.5px; font-weight: 600; }
+.ch-desc { font-size: 11.5px; color: var(--text-faint); word-break: keep-all; }
+
+/* ---------- 첫 실행 안내 ---------- */
+.intro {
+  flex: 1; display: flex; flex-direction: column; justify-content: center;
+  gap: 16px; padding: 0 4px 20px;
+}
+.intro-brand { font-size: 20px; font-weight: 700; letter-spacing: .18em; }
+.intro-brand span { color: var(--accent); }
+.intro-lead { font-size: 22px; font-weight: 600; line-height: 1.5; word-break: keep-all; margin-bottom: 6px; }
+.intro-points { display: flex; flex-direction: column; gap: 16px; margin-bottom: 14px; }
+.ip { display: flex; gap: 12px; font-size: 13px; color: var(--text-dim); line-height: 1.6; word-break: keep-all; }
+.ip-icon { font-size: 20px; flex: 0 0 auto; }
+.ip b { color: var(--text); font-size: 14px; }
+
+/* ---------- 결과 · 오늘의 훈련 · 공유 ---------- */
+.result-daily { font-size: 12.5px; color: var(--text-dim); margin-top: 12px; letter-spacing: .04em; }
+.result-daily.done { color: var(--good); font-weight: 700; font-size: 14px; }
+.result-share { margin: 0; font-size: 13px; padding: 12px; }
+.result-next-why { font-size: 11.5px; color: var(--text-faint); margin-top: 10px; }
+
+/* ---------- 기록 · 최근 7일 막대 ---------- */
+.weekchart { display: flex; align-items: flex-end; justify-content: space-between; gap: 4px; }
+.wc-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.wc-bar-wrap { height: 44px; display: flex; align-items: flex-end; }
+.wc-bar { width: 16px; border-radius: 3px; display: block; }
+.wc-bar.up { background: var(--accent); }
+.wc-bar.down { background: var(--bad); }
+.wc-lp { font-size: 10px; color: var(--text-faint); min-height: 13px; }
+.wc-day { font-size: 11px; color: var(--text-faint); }
+.wc-col.today .wc-day { color: var(--accent); font-weight: 700; }
+.wc-sum { font-size: 12px; color: var(--text-dim); text-align: center; margin-top: 10px; }
+
 /* ---------- 홈 · 종목 목록 ---------- */
 .list-head {
   display: flex; justify-content: space-between; align-items: baseline;

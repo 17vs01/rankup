@@ -6,8 +6,10 @@ import { judge } from '../feedback.js';
 const ROUNDS = 8;
 const EXPECTED_PER_ROUND = 55;
 
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-const rnd = (a, b) => a + Math.random() * (b - a);
+// 데일리 챌린지면 ctx.rng(시드 난수)가 들어온다
+let R = Math.random;
+const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
+const rnd = (a, b) => a + R() * (b - a);
 
 export const eyeballGame = {
   id: 'eyeball',
@@ -15,6 +17,7 @@ export const eyeballGame = {
   icon: '📐',
   desc: '각도·비율·개수 순간 추정',
   run(ctx) {
+    R = ctx.rng || Math.random;
     const L = Math.max(0, (ctx.rating - 800) / 150);
     // 허용 오차: 눈금 전체 범위 대비 비율. 레벨이 오르면 좁아진다.
     const tolFrac = Math.max(0.025, 0.14 - L * 0.011);

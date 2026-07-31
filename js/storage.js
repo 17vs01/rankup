@@ -35,7 +35,12 @@ function freshState() {
     totalSessions: 0,
     streak: 0,
     lastStreakDay: '',
-    history: [],        // 최근 세션 기록 (최대 50)
+    freeze: 0,          // 스트릭 보호권 (7일 연속마다 +1, 최대 2)
+    freezeAt: 0,        // 마지막으로 보호권을 준 스트릭 값 (중복 지급 방지)
+    daily: null,        // 오늘의 훈련 { day, ids[], done[] }
+    week: null,         // 이번 주 { key, lp, sessions }
+    onboarded: 0,       // 첫 실행 안내를 봤는가
+    history: [],        // 최근 세션 기록 (최대 120)
   };
 }
 
@@ -83,8 +88,15 @@ export function loadState() {
   if (!s.modes) s.modes = {};
   s.totalSessions = num(s.totalSessions, 0);
   s.streak = num(s.streak, 0);
+  s.freeze = Math.max(0, Math.min(2, num(s.freeze, 0)));
+  s.freezeAt = num(s.freezeAt, 0);
+  s.onboarded = num(s.onboarded, 0);
   if (typeof s.lastStreakDay !== 'string') s.lastStreakDay = '';
   if (!Array.isArray(s.history)) s.history = [];
+  if (s.daily && (typeof s.daily !== 'object' || !Array.isArray(s.daily.ids))) s.daily = null;
+  if (s.daily && !Array.isArray(s.daily.done)) s.daily.done = [];
+  if (s.week && (typeof s.week !== 'object' || typeof s.week.key !== 'string')) s.week = null;
+  if (s.week) { s.week.lp = num(s.week.lp, 0); s.week.sessions = num(s.week.sessions, 0); }
   return s;
 }
 
@@ -129,16 +141,30 @@ export function recordSession(s, discId, { score, delta, perf }) {
   if (score > d.best) d.best = score;
   s.totalSessions++;
 
-  // 스트릭
+  // 스트릭. 하루를 건너뛰었어도 보호권(freeze)이 있으면 하나 쓰고 이어간다.
   const today = dayKey();
+  let freezeUsed = false;
   if (s.lastStreakDay !== today) {
     const yesterday = dayKey(Date.now() - 24 * 3600 * 1000);
-    s.streak = (s.lastStreakDay === yesterday) ? s.streak + 1 : 1;
+    const dayBefore = dayKey(Date.now() - 48 * 3600 * 1000);
+    if (s.lastStreakDay === yesterday) {
+      s.streak = s.streak + 1;
+    } else if (s.lastStreakDay === dayBefore && (s.freeze || 0) > 0) {
+      s.freeze--;                 // 딱 하루 빠진 것만 메워준다
+      s.streak = s.streak + 1;
+      freezeUsed = true;
+    } else {
+      s.streak = 1;
+    }
     s.lastStreakDay = today;
   }
 
-  s.history.unshift({ t: Date.now(), discId, score, delta, perf: Math.round(perf * 100) / 100 });
-  if (s.history.length > 50) s.history.length = 50;
+  s.history.unshift({
+    t: Date.now(), discId, score, delta,
+    perf: Math.round(perf * 100) / 100,
+    r: d.rating,   // 그때의 레이팅 — 주간 추이 그래프용
+  });
+  if (s.history.length > 120) s.history.length = 120;
   saveState(s);
-  return { newRecord };
+  return { newRecord, freezeUsed };
 }

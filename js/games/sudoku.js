@@ -28,6 +28,7 @@ const EXPECTED_SEC = { 쉬움: 300, 보통: 420, 어려움: 540, 전문가: 660,
 
 export const sudokuGame = {
   id: 'sudoku',
+  long: true,   // 한 판이 5~20분. 오늘의 훈련·첫 판에서는 뒤로 미룬다.
   name: '스도쿠',
   icon: '🔢',
   desc: '9×9 클래식 · 이어하기 지원',

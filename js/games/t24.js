@@ -10,7 +10,9 @@ import { judge } from '../feedback.js';
 
 const ROUNDS = 5;
 const EPS = 1e-6;
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+// 데일리 챌린지면 ctx.rng(시드 난수)가 들어온다
+let R = Math.random;
+const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
 
 // 타임어택 단계별 제한 시간(초). 12%씩 줄고 45초에서 멈춘다.
 function limitFor(level) {
@@ -76,6 +78,7 @@ export const t24Game = {
     { id: 'attack', name: '타임어택', desc: '단계가 오를수록 시간이 줄어듭니다' },
   ],
   run(ctx) {
+    R = ctx.rng || Math.random;
     const L = Math.max(0, (ctx.rating - 800) / 250);
     const attack = ctx.mode === 'attack';
 
@@ -124,11 +127,13 @@ export const t24Game = {
     const $autobtn = ctx.body.querySelector('#t24-autobtn');
 
     // 정답(성공) 공개 후 자동으로 다음 문제로 넘어갈지. 끄면 "확인"을 눌러야 넘어간다.
-    let autoNext = ctx.state.t24Auto !== false;   // 기본 ON
+    // 타임어택은 기다리는 동안에도 시계가 흘러 손해만 보므로 항상 자동으로 넘긴다.
+    let autoNext = attack ? true : ctx.state.t24Auto !== false;   // 기본 ON
     function renderAutoBtn() {
       $autobtn.textContent = autoNext ? '정답 후 자동 넘기기 · ON' : '정답 후 자동 넘기기 · OFF';
       $autobtn.classList.toggle('off', !autoNext);
     }
+    if (attack) $autobtn.classList.add('hidden');   // 타임어택은 선택지 자체를 감춘다
     renderAutoBtn();
     $autobtn.addEventListener('pointerdown', e => {
       e.preventDefault();

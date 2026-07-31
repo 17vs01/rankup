@@ -26,61 +26,67 @@ const SOURCES = [
   { id: 'eng', name: '영단어', desc: '기초 → 수능 → 토익 고득점 → GRE급' },
 ];
 
+function readSel(state) {
+  const s = Array.isArray(state.lexiSel)
+    ? state.lexiSel.filter(x => SOURCES.some(y => y.id === x)) : [];
+  return s.length ? s : ['kor', 'eng'];
+}
+
 export const lexiGame = {
   id: 'lexi',
   name: '어휘력',
   icon: '📚',
   desc: '우리말·영단어 골라서 또는 섞어서',
+
+  // 방법 화면에서 카운트다운 전에 고르게 한다 (focus.js와 같은 규약)
+  picker(state, host, onStart) {
+    let sel = readSel(state);
+    host.innerHTML = `
+      <div class="fp-wrap">
+        <div class="fp-title">어떤 어휘를 단련할까요?</div>
+        ${SOURCES.map(s => `
+          <button class="fp-item${sel.includes(s.id) ? ' on' : ''}" data-id="${s.id}">
+            <span class="fp-check">✓</span>
+            <span><span class="fp-name">${s.name}</span><div class="fp-desc">${s.desc}</div></span>
+          </button>`).join('')}
+        <div class="fp-goal" id="lx-goal"></div>
+        <button class="btn-primary" id="lx-start">시작</button>
+      </div>
+    `;
+    const $goal = host.querySelector('#lx-goal');
+    const update = () => {
+      $goal.textContent = sel.length === 2
+        ? '통합 — 우리말과 영단어가 랜덤으로 섞여 나옵니다'
+        : sel[0] === 'kor' ? '우리말만 60초' : '영단어만 60초';
+    };
+    update();
+    host.querySelectorAll('.fp-item').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = b.dataset.id;
+        if (sel.includes(id)) {
+          if (sel.length === 1) return;   // 최소 1개
+          sel = sel.filter(s => s !== id);
+          b.classList.remove('on');
+        } else {
+          sel = SOURCES.map(s => s.id).filter(s => sel.includes(s) || s === id);
+          b.classList.add('on');
+        }
+        sfx.tick();
+        update();
+      });
+    });
+    host.querySelector('#lx-start').addEventListener('click', () => {
+      state.lexiSel = sel.slice();
+      onStart();
+    });
+  },
+
   run(ctx) {
     const tier = mainTier(ctx.rating);
     const engStore = ctx.state.vocab || (ctx.state.vocab = {});
     const korStore = ctx.state.korvocab || (ctx.state.korvocab = {});
     const now = Date.now();
-
-    let sel = Array.isArray(ctx.state.lexiSel)
-      ? ctx.state.lexiSel.filter(s => SOURCES.some(x => x.id === s)) : [];
-    if (!sel.length) sel = ['kor', 'eng'];
-
-    // ---------- 갈래 선택 ----------
-    function picker() {
-      ctx.setTitle('📚 어휘력');
-      ctx.body.innerHTML = `
-        <div class="fp-wrap">
-          <div class="fp-title">오늘은 어떤 어휘를 단련할까요?</div>
-          ${SOURCES.map(s => `
-            <button class="fp-item${sel.includes(s.id) ? ' on' : ''}" data-id="${s.id}">
-              <span class="fp-check">✓</span>
-              <span><span class="fp-name">${s.name}</span><div class="fp-desc">${s.desc}</div></span>
-            </button>`).join('')}
-          <div class="fp-goal" id="lx-goal"></div>
-          <button class="btn-primary" id="lx-start">시작</button>
-        </div>
-      `;
-      const $goal = ctx.body.querySelector('#lx-goal');
-      const update = () => {
-        $goal.textContent = sel.length === 2
-          ? '통합 — 우리말과 영단어가 랜덤으로 섞여 나옵니다'
-          : sel[0] === 'kor' ? '우리말만 60초' : '영단어만 60초';
-      };
-      update();
-      ctx.body.querySelectorAll('.fp-item').forEach(b => {
-        b.addEventListener('pointerdown', e => {
-          e.preventDefault();
-          const id = b.dataset.id;
-          if (sel.includes(id)) {
-            if (sel.length === 1) return;   // 최소 1개
-            sel = sel.filter(s => s !== id);
-            b.classList.remove('on');
-          } else {
-            sel = SOURCES.map(s => s.id).filter(s => sel.includes(s) || s === id);
-            b.classList.add('on');
-          }
-          sfx.tick();
-          update();
-        });
-      });
-      ctx.body.querySelector('#lx-start').addEventListener('click', begin);
-    }
+    const sel = readSel(ctx.state);
 
     // ---------- 출제 큐 ----------
     // 복습 예정 단어 우선, 그다음 주력 난이도 (양쪽 다 같은 방식)
@@ -116,10 +122,7 @@ export const lexiGame = {
     }
 
     // ---------- 본 게임 ----------
-    function begin() {
-      ctx.state.lexiSel = sel.slice();
-      ctx.persist();
-
+    (function begin() {
       const korQueue = buildQueue(KOR_VOCAB, korStore);
       const engQueue = buildQueue(VOCAB, engStore);
       let qKor = 0, qEng = 0;
@@ -211,8 +214,6 @@ export const lexiGame = {
           detail: `${srcName} · 정답 ${correct} · 오답 ${wrong}${missed}`,
         });
       });
-    }
-
-    picker();
+    })();
   },
 };

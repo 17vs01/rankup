@@ -7,7 +7,9 @@ import { judge } from '../feedback.js';
 const ROUNDS = 4;
 const EXPECTED_PER_ROUND = 55;
 
-const rnd = (a, b) => a + Math.random() * (b - a);
+// 데일리 챌린지면 ctx.rng(시드 난수)가 들어온다
+let R = Math.random;
+const rnd = (a, b) => a + R() * (b - a);
 
 export const chronoGame = {
   id: 'chrono',
@@ -15,6 +17,7 @@ export const chronoGame = {
   icon: '⏳',
   desc: '보지 않고 시간 맞히기',
   run(ctx) {
+    R = ctx.rng || Math.random;
     const L = Math.max(0, (ctx.rating - 800) / 150);
     // 목표 시간대와 허용 오차(비율)가 레벨에 따라 조여든다
     const lo = 4 + Math.min(8, L * 1.3);

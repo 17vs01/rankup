@@ -3,9 +3,10 @@ import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.
 import { sfx } from './audio.js';
 import { exportState, readBackup, fmtDate } from './backup.js';
 import { RULES } from './rules.js';
+import { seededRandom, seedFor, dailyChallengeId } from './daily.js';
 import {
   initPlatform, inToss, getNickname, setLocalNickname, canEditNickname,
-  compositeScore, submitScore, openLeaderboard, hasLeaderboard, onBack,
+  submitScore, openLeaderboard, hasLeaderboard, onBack,
   getLeaderboardInfo,
 } from './platform.js';
 import { mathGame } from './games/math.js';
@@ -35,6 +36,7 @@ let currentGame = null;
 let sessionActive = false;
 let sessionToken = 0;
 let currentCtx = null;
+let dailyMode = false;   // 이번 판이 데일리 챌린지인가
 
 // ---------- 화면 전환 ----------
 // 전환 직후 짧게 입력을 막는다. 게임 마지막 탭이 결과 화면 버튼으로 새는
@@ -133,13 +135,66 @@ function renderHome() {
     $notice.classList.add('hidden');
   }
 
-  // ----- 이어서 하기: 가장 오래 쉰 종목 -----
-  const urgent = GAMES.slice().sort((a, b) =>
-    (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
-  const ud = state.disc[urgent.id];
-  $('#cta-kicker').textContent = ud.sessions === 0 ? '아직 안 해본 종목' : '가장 오래 쉬었어요';
-  $('#cta-name').textContent = `${urgent.icon}  ${urgent.name}`;
-  $('#btn-quick').onclick = () => startSession(urgent);
+  // ----- 오늘의 훈련: 3종목을 골라준다 -----
+  const plan = todayPlan();
+  const doneN = plan.done.length;
+  $('#daily-count').textContent = doneN >= plan.ids.length
+    ? '완주 ✓' : `${doneN} / ${plan.ids.length}`;
+  $('#daily-count').classList.toggle('done', doneN >= plan.ids.length);
+
+  const $dl = $('#daily-list');
+  $dl.innerHTML = '';
+  for (const id of plan.ids) {
+    const g = GAMES.find(x => x.id === id);
+    const d = state.disc[id];
+    const done = plan.done.includes(id);
+    const ttd = timeToDecay(d, now);
+    const why = d.sessions === 0 ? '아직 안 해본 종목'
+      : (d.lastPlayed && ttd <= 0) ? '지금 LP가 줄고 있어요'
+      : (d.lastPlayed && ttd < 12 * 3600 * 1000) ? `${fmtRemain(ttd)} 뒤 LP 감소`
+      : '평균보다 뒤처져 있어요';
+    const b = document.createElement('button');
+    b.className = 'daily-item' + (done ? ' done' : '');
+    b.innerHTML = `
+      <span class="di-check">${done ? '✓' : ''}</span>
+      <span class="di-icon">${g.icon}</span>
+      <span class="di-main">
+        <span class="di-name">${g.name}</span>
+        <span class="di-why">${done ? '완료' : why}</span>
+      </span>`;
+    b.addEventListener('click', () => startSession(g));
+    $dl.appendChild(b);
+  }
+
+  // ----- 오늘의 도전: 날짜 시드라 전 유저가 같은 문제를 푼다 -----
+  const chId = dailyChallengeId(dayKeyOf(), GAMES);
+  const chGame = chId && GAMES.find(g => g.id === chId);
+  const $ch = $('#btn-challenge');
+  if (chGame) {
+    const cleared = state.daily && state.daily.challenge === chId;
+    $('#challenge-name').textContent = `${chGame.icon} ${chGame.name}`;
+    $('#challenge-desc').textContent = cleared
+      ? '오늘 도전 완료 · 다시 풀어도 같은 문제예요'
+      : '모두가 똑같은 문제를 풉니다';
+    $ch.classList.toggle('done', !!cleared);
+    $ch.onclick = () => startSession(chGame, false, false, true);
+    $ch.classList.remove('hidden');
+  } else {
+    $ch.classList.add('hidden');
+  }
+
+  // 완주했으면 "이어서 하기"로 다음 판을 권한다. 아니면 감춘다.
+  const $quick = $('#btn-quick');
+  if (doneN >= plan.ids.length) {
+    const urgent = GAMES.slice().sort((a, b) =>
+      (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
+    $('#cta-kicker').textContent = '오늘 몫 완주 · 한 판 더';
+    $('#cta-name').textContent = `${urgent.icon}  ${urgent.name}`;
+    $quick.onclick = () => startSession(urgent);
+    $quick.classList.remove('hidden');
+  } else {
+    $quick.classList.add('hidden');
+  }
 
   // ----- 목록 -----
   const played = GAMES.filter(g => state.disc[g.id].sessions > 0).length;
@@ -196,6 +251,98 @@ function renderHome() {
   requestAnimationFrame(updateScrollHint);
 }
 
+// ---------- 오늘의 훈련 ----------
+// 매일 3종목을 골라준다. 목록 11개 앞에서 "뭘 하지"를 고민하지 않게 하는 게 목적.
+// 고르는 기준: ① 이미 LP가 줄고 있거나 곧 줄 종목 ② 아직 안 해본 종목
+// ③ 평균보다 뒤처진 종목. 날짜가 바뀌면 다시 뽑는다.
+const DAILY_N = 3;
+
+function dayKeyOf(t = Date.now()) {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function pickDaily() {
+  const now = Date.now();
+  const avg = GAMES.reduce((a, g) => a + state.disc[g.id].rating, 0) / GAMES.length;
+  const scored = GAMES.map(g => {
+    const d = state.disc[g.id];
+    const ttd = timeToDecay(d, now);
+    let s = 0;
+    if (d.lastPlayed && ttd <= 0) s += 100;                        // 지금 줄고 있다
+    else if (d.lastPlayed && ttd < 12 * 3600 * 1000) s += 60;      // 곧 준다
+    if (d.sessions === 0) s += 45;                                  // 아직 안 해봤다
+    s += Math.max(0, (avg - d.rating) / 12);                        // 평균보다 뒤처진 만큼
+    if (d.lastPlayed) s += Math.min(25, (now - d.lastPlayed) / (12 * 3600 * 1000) * 5);
+    if (g.long) s -= 70;   // 긴 종목은 "3판이면 끝"이라는 약속을 깨뜨린다
+    return { id: g.id, s };
+  }).sort((a, b) => b.s - a.s);
+  return scored.slice(0, DAILY_N).map(x => x.id);
+}
+
+// 오늘 몫을 읽는다. 날짜가 바뀌었으면 새로 뽑는다.
+function todayPlan() {
+  const key = dayKeyOf();
+  if (!state.daily || state.daily.day !== key) {
+    state.daily = { day: key, ids: pickDaily(), done: [] };
+    saveState(state);
+  }
+  // 종목이 사라진 옛 저장본 방어
+  state.daily.ids = state.daily.ids.filter(id => GAMES.some(g => g.id === id));
+  if (state.daily.ids.length < DAILY_N) {
+    state.daily.ids = pickDaily();
+    saveState(state);
+  }
+  return state.daily;
+}
+
+// 한 판 끝날 때마다 오늘 몫에 체크
+function markDaily(gameId) {
+  const plan = todayPlan();
+  if (plan.ids.includes(gameId) && !plan.done.includes(gameId)) {
+    plan.done.push(gameId);
+    return plan.done.length === plan.ids.length;   // 방금 완주했는가
+  }
+  return false;
+}
+
+// ---------- 주간 리그 ----------
+// 토스 리더보드에 "평생 누적"을 올리면 상위권이 고착돼 새 유저가 포기한다.
+// 그래서 이번 주에 딴 LP만 올린다. 월요일 04시(KST 기준 새벽)에 리셋.
+function weekKeyOf(t = Date.now()) {
+  const d = new Date(t);
+  d.setHours(d.getHours() - 4);              // 새벽 4시를 하루의 시작으로
+  const day = (d.getDay() + 6) % 7;          // 월=0
+  d.setDate(d.getDate() - day);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function weeklyBucket() {
+  const key = weekKeyOf();
+  if (!state.week || state.week.key !== key) state.week = { key, lp: 0, sessions: 0 };
+  return state.week;
+}
+
+function addWeeklyLp(delta) {
+  const w = weeklyBucket();
+  w.lp += Math.max(0, delta);   // 잃은 LP까지 빼면 "안 하는 게 이득"이 된다
+  w.sessions++;
+}
+
+function weeklyScore() { return weeklyBucket().lp; }
+
+// ---------- 스트릭 프리즈 ----------
+// 7일 연속마다 보호권 1개(최대 2개). 하루 빠지면 자동으로 하나 쓰고 스트릭을 지킨다.
+// storage.recordSession이 스트릭을 올리므로, 여기서는 지급만 판단한다.
+function grantFreezeIfDue() {
+  if (state.streak > 0 && state.streak % 7 === 0 && state.freezeAt !== state.streak) {
+    state.freezeAt = state.streak;
+    state.freeze = Math.min(2, (state.freeze || 0) + 1);
+    return true;
+  }
+  return false;
+}
+
 // ---------- 세션 ----------
 function clearSession() {
   activeTimers.forEach(id => { clearTimeout(id); clearInterval(id); });
@@ -212,6 +359,10 @@ function makeCtx(game) {
     body: $('#game-body'),
     rating: d.rating,
     state,
+    // 데일리 챌린지면 모두가 같은 판을 받도록 시드 난수를 쓴다.
+    // 게임이 ctx.rng()를 쓰면 자동으로 따라온다 (안 쓰면 평소처럼 무작위).
+    daily: dailyMode,
+    rng: dailyMode ? seededRandom(seedFor(dayKeyOf(), game.id)) : Math.random,
     // 모드가 있는 종목이면 지금 고른 모드 id (없으면 null)
     mode: game.modes ? (state.modes[game.id] || game.modes[0].id) : null,
     setTitle(t) { $('#game-title').textContent = t; },
@@ -271,6 +422,9 @@ function makeCtx(game) {
 }
 
 // ---------- 게임 방법 ----------
+// 방법 화면을 거쳐 시작할 때도 "오늘의 도전"이라는 의도가 유지돼야 한다
+let pendingDaily = false;
+
 function showRules(game) {
   const r = RULES[game.id];
   if (!r) { startSession(game, true); return; }
@@ -294,10 +448,14 @@ function showRules(game) {
       .map(([k, label, unit]) => `<div class="stat-row"><span>${label}</span><span>${fmtDur(recs[k], unit || spec.unit)}</span></div>`)
       .join('');
   }
-  // 모드가 있는 종목은 시작 버튼을 모드별로 나눠 보여준다
+  // 시작 영역: 픽커(고를 게 있는 종목) > 모드 버튼 > 그냥 시작하기
   const $modes = $('#rules-modes');
   $modes.innerHTML = '';
-  if (game.modes && game.modes.length) {
+  if (game.picker) {
+    // 카운트다운 앞에서 고르게 한다 — 게임 안에서 고르면 긴장이 끊긴다
+    $('#btn-rules-start').classList.add('hidden');
+    game.picker(state, $modes, () => { saveState(state); startSession(game, true, false, pendingDaily); });
+  } else if (game.modes && game.modes.length) {
     $('#btn-rules-start').classList.add('hidden');
     const cur = state.modes[game.id] || game.modes[0].id;
     for (const m of game.modes) {
@@ -307,13 +465,13 @@ function showRules(game) {
       b.addEventListener('click', () => {
         state.modes[game.id] = m.id;
         saveState(state);
-        startSession(game, true);
+        startSession(game, true, false, pendingDaily);
       });
       $modes.appendChild(b);
     }
   } else {
     $('#btn-rules-start').classList.remove('hidden');
-    $('#btn-rules-start').onclick = () => startSession(game, true);
+    $('#btn-rules-start').onclick = () => startSession(game, true, false, pendingDaily);
   }
 
   $('#rules-scroll').scrollTop = 0;
@@ -324,12 +482,19 @@ function showRules(game) {
   }
   show('#screen-rules');
 }
-$('#btn-rules-back').addEventListener('click', () => renderHome());
+$('#btn-rules-back').addEventListener('click', () => { pendingDaily = false; renderHome(); });
 
-function startSession(game, skipRules = false) {
+function startSession(game, skipRules = false, quick = false, daily = false) {
   if (sessionActive) return;   // 재진입 방지
-  // 처음 하는 종목은 방법부터 보여준다
-  if (!skipRules && !state.seenRules[game.id]) { showRules(game); return; }
+  dailyMode = daily;
+  // 처음 하는 종목은 방법부터 보여준다.
+  // 고를 게 있는 종목(집중력·어휘력)은 매번 방법 화면의 픽커를 거친다.
+  if (!skipRules && (!state.seenRules[game.id] || game.picker)) {
+    pendingDaily = daily;      // 방법 화면을 거쳐도 도전 의도를 잃지 않게
+    showRules(game);
+    return;
+  }
+  pendingDaily = false;
   clearSession();
   currentCtx = null;
   sessionActive = true;
@@ -343,11 +508,12 @@ function startSession(game, skipRules = false) {
   const $body = $('#game-body');
   show('#screen-game');
 
-  // 3초 카운트다운 — 그 사이에 한 줄 요약을 되새겨준다
-  let n = 3;
+  // 카운트다운. 처음 보는 판은 3초 동안 한 줄 요약을 되새겨주고,
+  // "한 판 더"처럼 이미 흐름을 타고 있을 때는 1초만 끊는다 (quick).
+  let n = quick ? 1 : 3;
   const rule = RULES[game.id];
   $body.innerHTML = `<div class="countdown">${n}</div>`
-    + (rule ? `<div class="countdown-summary">${rule.summary}</div>` : '');
+    + (!quick && rule ? `<div class="countdown-summary">${rule.summary}</div>` : '');
   sfx.tick();
   const cd = setInterval(() => {
     n--;
@@ -361,7 +527,7 @@ function startSession(game, skipRules = false) {
       currentCtx = makeCtx(game);
       game.run(currentCtx);
     }
-  }, 800);
+  }, quick ? 600 : 800);
   activeTimers.push(cd);
 }
 
@@ -409,8 +575,16 @@ function endSession(game, result) {
 
   const { newRecord } = recordSession(state, game.id, { score: result.score, delta, perf: result.perf });
 
-  // 토스 안이면 종합 점수를 리더보드에 올린다 (실패해도 조용히 넘어간다)
-  if (inToss()) submitScore(compositeScore(state, GAMES.map(g => g.id)));
+  // 오늘의 훈련 진행 + 주간 획득 LP + 오늘의 도전 완료 표시
+  const justFinishedDaily = markDaily(game.id);
+  addWeeklyLp(delta);
+  const plan = todayPlan();
+  const wasChallenge = dailyMode;
+  if (wasChallenge) plan.challenge = game.id;
+  saveState(state);
+
+  // 토스 안이면 이번 주 점수를 리더보드에 올린다 (실패해도 조용히 넘어간다)
+  if (inToss()) submitScore(weeklyScore());
   const after = d.rating;
   const afterTier = tierOf(after);
   const tierUp = afterTier.idx > beforeTier.idx;
@@ -418,6 +592,19 @@ function endSession(game, result) {
 
   if (tierUp) sfx.tierup();
   else sfx.finish();
+
+  // 다음에 뭘 할지 여기서 이어준다 — 결과 화면이 막다른 길이 되지 않게.
+  // 오늘 몫에 남은 게 있으면 그걸, 없으면 가장 급한 종목을.
+  const remain = plan.ids.filter(id => !plan.done.includes(id) && id !== game.id);
+  const nextGame = remain.length
+    ? GAMES.find(g => g.id === remain[0])
+    : GAMES.slice().filter(g => g.id !== game.id).sort((a, b) =>
+      (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
+  const nextWhy = remain.length ? '오늘의 훈련' : '가장 오래 쉬었어요';
+
+  const dailyDone = plan.done.length >= plan.ids.length;
+  const gotFreeze = grantFreezeIfDue();
+  saveState(state);
 
   const $r = $('#result-body');
   $r.innerHTML = `
@@ -431,14 +618,50 @@ function endSession(game, result) {
     <div class="result-bar"><i style="width:${tierProgress(after) * 100}%;background:${afterTier.color}"></i></div>
     ${tierUp ? `<div class="result-tierup" style="color:${afterTier.color}">${afterTier.name} 승급</div>` : ''}
     ${tierDown ? `<div class="result-tierup" style="color:var(--bad)">${afterTier.name} 강등</div>` : ''}
+    ${wasChallenge ? '<div class="result-daily done">🗓 오늘의 도전 완료</div>' : ''}
+    ${justFinishedDaily
+      ? '<div class="result-daily done">🎯 오늘의 훈련 완주!</div>'
+      : `<div class="result-daily">🎯 오늘의 훈련 ${plan.done.length} / ${plan.ids.length}</div>`}
+    ${gotFreeze ? `<div class="result-newrecord">❄ ${state.streak}일 연속 · 스트릭 보호권 +1</div>` : ''}
     <div class="result-buttons">
-      <button class="btn-primary" id="btn-again">한 판 더</button>
+      ${nextGame && !dailyDone
+        ? `<button class="btn-primary" id="btn-next">다음 · ${nextGame.icon} ${nextGame.name}</button>
+           <button class="btn-secondary" id="btn-again">한 판 더</button>`
+        : `<button class="btn-primary" id="btn-again">한 판 더</button>
+           ${nextGame ? `<button class="btn-secondary" id="btn-next">다음 · ${nextGame.icon} ${nextGame.name}</button>` : ''}`}
+      <button class="btn-line result-share" id="btn-share">결과 공유</button>
       <button class="btn-secondary" id="btn-home">홈으로</button>
     </div>
+    <div class="result-next-why">${nextGame ? nextWhy : ''}</div>
   `;
-  $('#btn-again').addEventListener('click', () => startSession(game));
+  // "한 판 더"는 이미 흐름을 타고 있으니 카운트다운을 1초로 줄인다
+  $('#btn-again').addEventListener('click', () => startSession(game, !game.picker, true));
+  const $next = $('#btn-next');
+  if ($next) $next.addEventListener('click', () => startSession(nextGame));
+  $('#btn-share').addEventListener('click', () => shareResult(game, result, delta, after));
   $('#btn-home').addEventListener('click', renderHome);
   show('#screen-result');
+}
+
+// ---------- 결과 공유 ----------
+// 문제가 전부 절차 생성이라 "같은 문제"를 자랑할 수는 없지만,
+// 날짜·종목·점수·티어는 공유할 만하다 (Wordle식 한 덩어리 텍스트).
+async function shareResult(game, result, delta, after) {
+  const t = tierOf(after);
+  const d = new Date();
+  const date = `${d.getMonth() + 1}/${d.getDate()}`;
+  const plan = todayPlan();
+  const bar = plan.ids.map(id => plan.done.includes(id) ? '🟩' : '⬜').join('');
+  const text = [
+    `RANKUP ${date} · ${game.icon} ${game.name}${dailyMode ? ' (오늘의 도전)' : ''}`,
+    `${nf(result.score)}점 · ${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP · ${t.name} ${nf(after)}`,
+    `오늘의 훈련 ${bar}${state.streak > 0 ? ` · 🔥${state.streak}일` : ''}`,
+  ].join('\n');
+  try {
+    if (navigator.share) { await navigator.share({ text }); return; }
+    await navigator.clipboard.writeText(text);
+    toast('결과를 복사했어요');
+  } catch { toast('공유를 취소했어요'); }
 }
 
 // ---------- 중단 ----------
@@ -477,13 +700,25 @@ let lbInfo = null, lbFetchedAt = 0;
 const escapeHtml = s => String(s).replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// 이번 주가 끝나기까지 남은 시간
+function untilWeekEnd() {
+  const d = new Date();
+  const shifted = new Date(d.getTime() - 4 * 3600 * 1000);
+  const daysLeft = 7 - ((shifted.getDay() + 6) % 7);
+  const end = new Date(shifted);
+  end.setDate(end.getDate() + daysLeft);
+  end.setHours(0, 0, 0, 0);
+  return end.getTime() + 4 * 3600 * 1000 - d.getTime();
+}
+
 function renderRankCard() {
-  const comp = compositeScore(state, GAMES.map(g => g.id));
+  const w = weeklyBucket();
   const me = nickname || '나';
   $('#rank-mine').innerHTML = `
     <span class="rm-rank">${escapeHtml(me)}${lbInfo && lbInfo.myRank ? ` · ${nf(lbInfo.myRank)}위` : ''}</span>
-    <span class="rm-score">${nf(comp)}점</span>`;
+    <span class="rm-score">${nf(w.lp)}점</span>`;
   const $top = $('#rank-top');
+  const reset = `<div class="rank-note">이번 주 딴 LP로 겨룹니다 · ${fmtRemain(untilWeekEnd())} 뒤 리셋</div>`;
   if (lbInfo && lbInfo.top) {
     const medals = ['🥇', '🥈', '🥉'];
     $top.innerHTML = lbInfo.top.map((e, i) => `
@@ -491,11 +726,11 @@ function renderRankCard() {
         <span class="rr-medal">${medals[(e.rank || i + 1) - 1] || ''}</span>
         <span class="rr-name">${escapeHtml(e.name)}</span>
         ${e.score !== null ? `<span class="rr-score">${nf(Number(e.score) || 0)}점</span>` : ''}
-      </div>`).join('');
+      </div>`).join('') + reset;
   } else if (inToss()) {
-    $top.innerHTML = '<div class="rank-note">1·2·3위는 오른쪽 위 "전체 순위"에서 확인하세요</div>';
+    $top.innerHTML = '<div class="rank-note">1·2·3위는 오른쪽 위 "전체 순위"에서 확인하세요</div>' + reset;
   } else {
-    $top.innerHTML = '<div class="rank-note">토스 미니앱에서 열면 내 순위와 1·2·3위가 여기에 표시됩니다</div>';
+    $top.innerHTML = '<div class="rank-note">토스 미니앱에서 열면 내 순위와 1·2·3위가 여기에 표시됩니다</div>' + reset;
   }
 }
 
@@ -510,26 +745,64 @@ function refreshRankCard() {
   }
 }
 
+// 최근 7일 하루치 획득 LP 막대. history의 delta를 날짜별로 합친다.
+function weekChart() {
+  const days = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    days.push({ key: dayKeyOf(d.getTime()), label: '일월화수목금토'[d.getDay()], lp: 0, n: 0 });
+  }
+  const byKey = new Map(days.map(d => [d.key, d]));
+  for (const h of state.history) {
+    const slot = byKey.get(dayKeyOf(h.t));
+    if (!slot) continue;
+    slot.lp += h.delta;
+    slot.n++;
+  }
+  const max = Math.max(20, ...days.map(d => Math.abs(d.lp)));
+  const bars = days.map((d, i) => {
+    const h = Math.round(Math.abs(d.lp) / max * 40);
+    const up = d.lp >= 0;
+    return `<div class="wc-col${i === 6 ? ' today' : ''}">
+      <div class="wc-bar-wrap"><i class="wc-bar ${up ? 'up' : 'down'}" style="height:${Math.max(d.n ? 3 : 0, h)}px"></i></div>
+      <span class="wc-lp">${d.n ? (up ? '+' : '−') + Math.abs(d.lp) : ''}</span>
+      <span class="wc-day">${d.label}</span>
+    </div>`;
+  }).join('');
+  const total = days.reduce((a, d) => a + d.lp, 0);
+  const played = days.filter(d => d.n > 0).length;
+  return `<div class="weekchart">${bars}</div>
+    <div class="wc-sum">최근 7일 ${total >= 0 ? '+' : '−'}${Math.abs(total)} LP · ${played}일 플레이</div>`;
+}
+
 function renderRecords() {
   applyDecay(state);
   const $sc = $('#records-scroll');
-  const comp = compositeScore(state, GAMES.map(g => g.id));
+  const w = weeklyBucket();
   const sects = [];
   sects.push(`<div class="sect">
-    <div class="sect-head">종합${nickname ? ` · ${nickname}` : ''}</div>
-    <div class="stat-rows">
-      <div class="stat-row"><span>종합 점수${inToss() ? ' (리더보드 제출값)' : ''}</span><span>${nf(comp)}</span></div>
+    <div class="sect-head">최근 7일${nickname ? ` · ${nickname}` : ''}</div>
+    ${weekChart()}
+    <div class="stat-rows" style="margin-top:14px">
+      <div class="stat-row"><span>이번 주 점수${inToss() ? ' (리더보드 제출값)' : ''}</span><span>${nf(w.lp)}</span></div>
+      <div class="stat-row"><span>이번 주 판수</span><span>${nf(w.sessions)}판</span></div>
       <div class="stat-row"><span>누적 판수</span><span>${nf(state.totalSessions)}판</span></div>
-      <div class="stat-row"><span>연속 기록</span><span>${state.streak > 0 ? state.streak + '일' : '없음'}</span></div>
+      <div class="stat-row"><span>연속 기록</span><span>${state.streak > 0 ? state.streak + '일' : '없음'}${state.freeze > 0 ? ` · ❄ 보호권 ${state.freeze}개` : ''}</span></div>
     </div>
   </div>`);
+  // 미플레이 종목은 한 줄로 묶는다 ("아직 기록이 없어요"가 열 줄 이어지면 화면이 죽는다)
+  const unplayed = GAMES.filter(g => state.disc[g.id].sessions === 0);
+  if (unplayed.length) {
+    sects.push(`<div class="sect">
+      <div class="sect-head">아직 안 해본 종목 ${unplayed.length}개</div>
+      <p class="sect-desc" style="margin:0">${unplayed.map(g => `${g.icon} ${g.name}`).join(' · ')}</p>
+    </div>`);
+  }
   for (const g of GAMES) {
     const d = state.disc[g.id];
-    if (d.sessions === 0) {
-      sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name}</div>
-        <p class="sect-desc" style="margin:0">아직 기록이 없어요</p></div>`);
-      continue;
-    }
+    if (d.sessions === 0) continue;
     const t = tierOf(d.rating);
     const recent = state.history.find(h => h.discId === g.id);
     const lines = [
@@ -726,8 +999,32 @@ function handleBack() {
   return true;
 }
 
+// ---------- 첫 실행 안내 ----------
+// 처음 온 사람에게 목록 11개를 던지면 고르다 지친다. 무엇을 하는 앱인지 세 줄로 알리고
+// 오늘의 훈련 첫 판으로 바로 태운다.
+function showIntro() {
+  const plan = todayPlan();
+  // 첫 판은 짧고 즉시 이해되는 종목으로 (긴 종목은 첫인상을 망친다)
+  const first = GAMES.find(g => g.id === plan.ids[0] && !g.long)
+    || GAMES.find(g => plan.ids.includes(g.id) && !g.long)
+    || GAMES.find(g => !g.long);
+  $('#btn-intro-start').textContent = `${first.icon} ${first.name} 시작하기`;
+  $('#btn-intro-start').onclick = () => {
+    state.onboarded = 1;
+    saveState(state);
+    startSession(first);
+  };
+  $('#btn-intro-skip').onclick = () => {
+    state.onboarded = 1;
+    saveState(state);
+    renderHome();
+  };
+  show('#screen-intro');
+}
+
 applyTheme(state.theme);
-renderHome();
+if (!state.onboarded && state.totalSessions === 0) showIntro();
+else renderHome();
 
 initPlatform().then(() => {
   onBack(handleBack);

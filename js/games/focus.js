@@ -26,19 +26,75 @@ function goalsFor(t) {
   };
 }
 
+// 저장된 선택을 읽는다 (없거나 망가졌으면 3종목 전부)
+function readSel(state) {
+  const s = Array.isArray(state.focusSel)
+    ? state.focusSel.filter(x => STAGES.some(st => st.id === x)) : [];
+  return s.length ? s : STAGES.map(x => x.id);
+}
+
 export const focusGame = {
   id: 'focus',
   name: '집중력',
   icon: '⚡',
   desc: '반응속도 + 스트룹 + 고/노고',
+
+  // 방법 화면에서 카운트다운 전에 고르게 한다 (게임 안에서 고르면 긴장이 끊긴다).
+  // host = 붙일 DOM, onStart = 고르고 나서 부를 함수.
+  picker(state, host, onStart) {
+    const level = (state.disc.focus.records && state.disc.focus.records.focus_level) || 0;
+    const goal = goalsFor(level + 1);
+    let sel = readSel(state);
+
+    host.innerHTML = `
+      <div class="fp-wrap">
+        <div class="fp-title">무엇을 단련할까요?</div>
+        ${STAGES.map(s => `
+          <button class="fp-item${sel.includes(s.id) ? ' on' : ''}" data-id="${s.id}">
+            <span class="fp-check">✓</span>
+            <span><span class="fp-name">${s.name}</span><div class="fp-desc">${s.desc}</div></span>
+          </button>`).join('')}
+        <div class="fp-goal" id="fp-goal"></div>
+        <button class="btn-primary" id="fp-start">시작</button>
+      </div>
+    `;
+    const $goal = host.querySelector('#fp-goal');
+    const update = () => {
+      if (sel.length === 3) {
+        $goal.innerHTML = `3종목 모두 통과하면 레벨업 — 지금 <b>${level}</b>단계<br>`
+          + `기준: 반응 ≤ ${goal.reaction}ms · 스트룹 ≥ ${goal.stroop} · 고/노고 ≥ ${goal.gonogo}`;
+      } else {
+        const reps = sel.length === 1 ? 5 : 3;
+        $goal.textContent = `${sel.length}종목 집중 단련 — 각 ${reps}판`;
+      }
+    };
+    update();
+    host.querySelectorAll('.fp-item').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = b.dataset.id;
+        if (sel.includes(id)) {
+          if (sel.length === 1) return;   // 최소 1종목
+          sel = sel.filter(s => s !== id);
+          b.classList.remove('on');
+        } else {
+          sel = STAGES.map(s => s.id).filter(s => sel.includes(s) || s === id);
+          b.classList.add('on');
+        }
+        sfx.tick();
+        update();
+      });
+    });
+    host.querySelector('#fp-start').addEventListener('click', () => {
+      state.focusSel = sel.slice();
+      onStart();
+    });
+  },
+
   run(ctx) {
     const d = ctx.state.disc.focus;
     const level = (d.records && d.records.focus_level) || 0;
     const goal = goalsFor(level + 1);
-
-    let sel = Array.isArray(ctx.state.focusSel)
-      ? ctx.state.focusSel.filter(s => STAGES.some(st => st.id === s)) : [];
-    if (!sel.length) sel = STAGES.map(s => s.id);
+    const sel = readSel(ctx.state);
 
     let plan = [], planIdx = 0;
     let totalPts = 0;
@@ -46,64 +102,6 @@ export const focusGame = {
     let bestReaction = null;   // 이번 판 최고 반응속도 (부정출발 제외, ms)
     // 레벨 판정용 — 3종목 모두일 때 각 종목의 성적
     const stats = { reactionAvg: null, stroopNet: null, gonogoNet: null };
-
-    // ---------- 종목 선택 ----------
-    function picker() {
-      ctx.setTitle('⚡ 집중력');
-      ctx.body.innerHTML = `
-        <div class="fp-wrap">
-          <div class="fp-title">오늘은 무엇을 단련할까요?</div>
-          ${STAGES.map(s => `
-            <button class="fp-item${sel.includes(s.id) ? ' on' : ''}" data-id="${s.id}">
-              <span class="fp-check">✓</span>
-              <span><span class="fp-name">${s.name}</span><div class="fp-desc">${s.desc}</div></span>
-            </button>`).join('')}
-          <div class="fp-goal" id="fp-goal"></div>
-          <button class="btn-primary" id="fp-start">시작</button>
-        </div>
-      `;
-      const $goal = ctx.body.querySelector('#fp-goal');
-      const update = () => {
-        if (sel.length === 3) {
-          $goal.innerHTML = `3종목 모두 통과하면 레벨업 — 지금 <b>${level}</b>단계<br>`
-            + `기준: 반응 ≤ ${goal.reaction}ms · 스트룹 ≥ ${goal.stroop} · 고/노고 ≥ ${goal.gonogo}`;
-        } else {
-          const reps = sel.length === 1 ? 5 : 3;
-          $goal.textContent = `${sel.length}종목 집중 단련 — 각 ${reps}판`;
-        }
-      };
-      update();
-      ctx.body.querySelectorAll('.fp-item').forEach(b => {
-        b.addEventListener('pointerdown', e => {
-          e.preventDefault();
-          const id = b.dataset.id;
-          if (sel.includes(id)) {
-            if (sel.length === 1) return;   // 최소 1종목
-            sel = sel.filter(s => s !== id);
-            b.classList.remove('on');
-          } else {
-            sel = STAGES.map(s => s.id).filter(s => sel.includes(s) || s === id);
-            b.classList.add('on');
-          }
-          sfx.tick();
-          update();
-        });
-      });
-      ctx.body.querySelector('#fp-start').addEventListener('click', begin);
-    }
-
-    function begin() {
-      ctx.state.focusSel = sel.slice();
-      ctx.persist();
-      const reps = sel.length === 1 ? 5 : sel.length === 2 ? 3 : 1;
-      plan = [];
-      for (const s of STAGES) {
-        if (!sel.includes(s.id)) continue;
-        for (let r = 1; r <= reps; r++) plan.push({ id: s.id, rep: r, reps });
-      }
-      planIdx = 0;
-      nextStage();
-    }
 
     function nextStage() {
       if (planIdx >= plan.length) return end();
@@ -336,6 +334,12 @@ export const focusGame = {
       });
     }
 
-    picker();
+    // 선택은 방법 화면에서 이미 끝났다. 바로 판을 짠다.
+    const reps = sel.length === 1 ? 5 : sel.length === 2 ? 3 : 1;
+    for (const s of STAGES) {
+      if (!sel.includes(s.id)) continue;
+      for (let r = 1; r <= reps; r++) plan.push({ id: s.id, rep: r, reps });
+    }
+    nextStage();
   },
 };

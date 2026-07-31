@@ -5,15 +5,17 @@ import { sfx } from '../audio.js';
 const DURATION = 60;
 const EXPECTED = 11;
 
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+// 데일리 챌린지면 ctx.rng(시드 난수)가 들어온다. 평소엔 Math.random.
+let rnd = Math.random;
+const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 const pick = arr => arr[ri(0, arr.length - 1)];
 
 // 레벨별 문제 생성기. 레벨 = (rating-800)/150
 function genProblem(level) {
   // 현재 레벨 ±1 범위에서 문제 유형 선택 (약간의 변주)
-  const L = Math.max(0, level + (Math.random() - 0.5) * 1.6);
+  const L = Math.max(0, level + (rnd() - 0.5) * 1.6);
   if (L < 1) {
-    if (Math.random() < 0.5) { const a = ri(3, 9), b = ri(3, 9); return { q: `${a} + ${b}`, a: a + b }; }
+    if (rnd() < 0.5) { const a = ri(3, 9), b = ri(3, 9); return { q: `${a} + ${b}`, a: a + b }; }
     const a = ri(5, 18), b = ri(2, Math.min(9, a - 1)); return { q: `${a} − ${b}`, a: a - b };
   }
   if (L < 2) {
@@ -76,6 +78,7 @@ export const mathGame = {
   icon: '🧮',
   desc: '60초 연산 스프린트',
   run(ctx) {
+    rnd = ctx.rng || Math.random;
     const level = (ctx.rating - 800) / 150;
     let correct = 0, wrong = 0, streak = 0, input = '', cur = null;
 

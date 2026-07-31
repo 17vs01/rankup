@@ -22,7 +22,9 @@ const DIRS = [
   { label: '앞왼쪽',   cell: 0 },
 ];
 
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+// 데일리 챌린지면 ctx.rng(시드 난수)가 들어온다
+let R = Math.random;
+const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
 
 // heading: 0=북 1=동 2=남 3=서
 const STEP = [[0, 1], [1, 0], [0, -1], [-1, 0]];
@@ -34,6 +36,7 @@ export const compassGame = {
   icon: '🧭',
   desc: '머릿속으로 길 추적하기',
   run(ctx) {
+    R = ctx.rng || Math.random;
     const L = Math.max(0, (ctx.rating - 800) / 150);
     const steps = Math.min(12, 3 + Math.floor(L));
     const showMs = Math.max(700, 1500 - L * 70);
@@ -65,7 +68,7 @@ export const compassGame = {
       for (let i = 0; i < steps; i++) {
         // 남은 지시로 최소 2번은 전진해야 방향이 결정된다
         const mustMove = steps - i <= 2 - moves;
-        if (mustMove || Math.random() < 0.5) {
+        if (mustMove || R() < 0.5) {
           const n = ri(1, 3);
           x += STEP[h][0] * n;
           y += STEP[h][1] * n;

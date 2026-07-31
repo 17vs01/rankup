@@ -63,7 +63,8 @@ export const memoryGame = {
       }
       // 패턴 선정
       const lit = new Set();
-      while (lit.size < k) lit.add(Math.floor(Math.random() * total));
+      const R = ctx.rng || Math.random;
+      while (lit.size < k) lit.add(Math.floor(R() * total));
 
       // 표시
       for (const i of lit) cells[i].classList.add('lit');
