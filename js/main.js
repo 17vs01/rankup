@@ -21,11 +21,16 @@ import { compassGame } from './games/compass.js';
 import { eyeballGame } from './games/eyeball.js';
 import { sudokuGame, SUDOKU_LEVELS } from './games/sudoku.js';
 import { t24Game } from './games/t24.js';
+import { schulteGame } from './games/schulte.js';
+import { simonGame } from './games/simon.js';
+import { compareGame } from './games/compare.js';
+import { anagramGame } from './games/anagram.js';
 
 // 랭크 종목. 스도쿠는 여기 없다 — 한 판 5~20분이라 "60초 랭크전"의 LP 경제와
 // 맞지 않아 랭크 밖 별관으로 뺐다 (아래 '스도쿠 별관' 참고).
 const GAMES = [
-  lexiGame, mathGame, memoryGame, focusGame,
+  lexiGame, anagramGame, mathGame, compareGame,
+  memoryGame, simonGame, focusGame, schulteGame,
   unpredictGame, chronoGame, compassGame, eyeballGame,
   t24Game,
 ];
@@ -77,6 +82,10 @@ const TIME_RECORDS = {
   t24:     { unit: 'sec', title: '내 기록', order: [['time_one', '한 문제 최단'], ['time_all', '5문제 전체 최단'], ['level_max', '타임어택 최고', 'level']] },
   focus:   { unit: 'ms',  title: '최고 기록', order: [['time_reaction', '반응속도'], ['focus_level', '3종목 레벨', 'level']] },
   memory:  { unit: 'cells', title: '내 기록', order: [['memory_cells', '최고 칸수']] },
+  schulte: { unit: 'sec', title: '격자별 최단', order: [['time_5x5', '5×5'], ['time_6x6', '6×6'], ['time_7x7', '7×7']] },
+  simon:   { unit: 'len', title: '내 기록', order: [['simon_len', '최고 길이']] },
+  compare: { unit: 'count', title: '내 기록', order: [['cm_streak', '최다 연속']] },
+  anagram: { unit: 'count', title: '내 기록', order: [['ag_streak', '최다 연속']] },
   unpredict: { unit: 'count', title: '내 기록', order: [['ai_rate_min', '최저 AI 적중률', 'pct'], ['evade_best', '최다 연속 회피']] },
 };
 
@@ -166,7 +175,8 @@ function renderHome() {
         <span class="di-name">${g.name}</span>
         <span class="di-why">${done ? '완료' : why}</span>
       </span>`;
-    b.addEventListener('click', () => startSession(g));
+    // 녹슬고 있다고 집어준 조합이 있으면 그 조합으로 열어준다
+    b.addEventListener('click', () => { applyVariant(g, plan.vars[id]); startSession(g); });
     $dl.appendChild(b);
   }
 
@@ -243,6 +253,8 @@ function renderHome() {
     row.addEventListener('click', e => {
       // ⓘ는 시작이 아니라 방법 화면으로
       if (e.target.closest('.row-info')) { showRules(g); return; }
+      // "우리말만이 녹슬고 있어요"를 보고 눌렀으면 그 조합으로 연다
+      if (warn && note.key) applyVariant(g, note.key);
       startSession(g);
     });
     $list.appendChild(row);
@@ -274,6 +286,16 @@ function dayKeyOf(t = Date.now()) {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
+// 종목이 정한 조합으로 열어준다 (오늘의 훈련·목록에서 "이게 녹슬고 있다"고 집었을 때)
+function applyVariant(game, key) {
+  if (!key) return;
+  if (game.applyVariant) { game.applyVariant(state, key); saveState(state); return; }
+  if (game.modes && game.modes.some(m => m.id === key)) {
+    state.modes[game.id] = key;
+    saveState(state);
+  }
+}
+
 function pickDaily() {
   const now = Date.now();
   const avg = GAMES.reduce((a, g) => a + state.disc[g.id].rating, 0) / GAMES.length;
@@ -288,24 +310,32 @@ function pickDaily() {
     if (d.sessions === 0) s += 45;                                  // 아직 안 해봤다
     s += Math.max(0, (avg - d.rating) / 12);                        // 평균보다 뒤처진 만큼
     if (d.lastPlayed) s += Math.min(25, (now - d.lastPlayed) / (12 * 3600 * 1000) * 5);
-    return { id: g.id, s };
+    // 급한 조합이 있으면 그 조합까지 집어둔다
+    return { id: g.id, s, vk: u ? u.key : null };
   }).sort((a, b) => b.s - a.s);
-  return scored.slice(0, DAILY_N).map(x => x.id);
+  const top = scored.slice(0, DAILY_N);
+  const vars = {};
+  for (const x of top) if (x.vk) vars[x.id] = x.vk;
+  return { ids: top.map(x => x.id), vars };
 }
 
 // 오늘 몫을 읽는다. 날짜가 바뀌었으면 새로 뽑는다.
 function todayPlan() {
   const key = dayKeyOf();
   if (!state.daily || state.daily.day !== key) {
-    state.daily = { day: key, ids: pickDaily(), done: [] };
+    const p = pickDaily();
+    state.daily = { day: key, ids: p.ids, vars: p.vars, done: [] };
     saveState(state);
   }
   // 종목이 사라진 옛 저장본 방어
   state.daily.ids = state.daily.ids.filter(id => GAMES.some(g => g.id === id));
   if (state.daily.ids.length < DAILY_N) {
-    state.daily.ids = pickDaily();
+    const p = pickDaily();
+    state.daily.ids = p.ids;
+    state.daily.vars = p.vars;
     saveState(state);
   }
+  if (!state.daily.vars) state.daily.vars = {};
   return state.daily;
 }
 
@@ -570,6 +600,7 @@ function startSession(game, skipRules = false, quick = false, daily = false) {
 function fmtDur(v, unit) {
   if (unit === 'level') return Math.round(v) + '단계';
   if (unit === 'cells') return Math.round(v) + '칸';
+  if (unit === 'len') return Math.round(v) + '개';
   if (unit === 'count') return Math.round(v) + '연속';
   if (unit === 'pct') return Math.round(v) + '%';
   if (unit === 'ms') return Math.round(v) + 'ms';
@@ -581,7 +612,7 @@ function fmtDur(v, unit) {
 }
 
 // 이 단위는 높을수록 좋은 기록이다 (나머지는 낮을수록)
-const HIGHER_BETTER = new Set(['level', 'cells', 'count']);
+const HIGHER_BETTER = new Set(['level', 'cells', 'count', 'len']);
 
 // ---------- 조합별 기록 ----------
 // 고를 게 있는 종목은 조합마다 판이 아예 다르다 (우리말만 vs 통합,
@@ -618,9 +649,9 @@ function decayNote(game, d, now = Date.now()) {
   const u = urgentVariant(d, now);
   if (!u) return null;
   const name = u.key ? `${variantLabelOf(game, u.key)} · ` : '';
-  if (u.ttd <= 0) return { urgent: true, text: `${name}지금 LP가 줄고 있어요` };
-  if (u.ttd < 12 * 3600 * 1000) return { urgent: true, text: `${name}${fmtRemain(u.ttd)} 뒤 LP 감소` };
-  return { urgent: false, ttd: u.ttd };
+  if (u.ttd <= 0) return { urgent: true, key: u.key, text: `${name}지금 LP가 줄고 있어요` };
+  if (u.ttd < 12 * 3600 * 1000) return { urgent: true, key: u.key, text: `${name}${fmtRemain(u.ttd)} 뒤 LP 감소` };
+  return { urgent: false, key: u.key, ttd: u.ttd };
 }
 
 // 표시 순서: 게임이 정한 순서 우선, 나머지는 판수 많은 순

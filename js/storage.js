@@ -5,7 +5,7 @@ const KEY = 'rankup-state-v1';
 
 // 랭크 종목. 스도쿠는 여기 없다 — 랭크 밖 별관이라 LP·부식·리그와 무관하다.
 const DISC_IDS = [
-  'math', 'lexi', 'memory', 'focus',
+  'math', 'lexi', 'anagram', 'compare', 'memory', 'simon', 'focus', 'schulte',
   'unpredict', 'chrono', 'compass', 'eyeball',
   't24',
 ];

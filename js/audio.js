@@ -34,6 +34,8 @@ export const sfx = {
     if (n >= 5) setTimeout(() => beep(f * 1.25, 0.06, 'sine', 0.08), 45);
     vibrate(15);
   },
+  // 음높이를 직접 정하는 소리 (사이먼처럼 패드마다 음이 달라야 할 때)
+  tone(freq, dur = 0.16) { beep(freq, dur, 'triangle', 0.14); vibrate(12); },
   bad() { beep(160, 0.15, 'square', 0.08); vibrate([30, 40, 30]); },
   tick() { beep(660, 0.04, 'sine', 0.06); },
   start() { beep(523, 0.1); setTimeout(() => beep(784, 0.12), 110); },

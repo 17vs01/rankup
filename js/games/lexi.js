@@ -48,6 +48,11 @@ export const lexiGame = {
   variantKey: state => keyOf(readSel(state)),
   variantLabel: key => LEXI_LABELS[key] || key,
   variantOrder: ['kor', 'eng', 'kor+eng'],
+  // 오늘의 훈련이 "우리말만이 녹슬고 있다"고 집었으면 그 조합으로 열어준다
+  applyVariant(state, key) {
+    const ids = String(key).split('+').filter(id => SOURCES.some(s => s.id === id));
+    if (ids.length) state.lexiSel = ids;
+  },
 
   // 방법 화면에서 카운트다운 전에 고르게 한다 (focus.js와 같은 규약)
   picker(state, host, onStart) {

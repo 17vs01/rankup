@@ -53,6 +53,11 @@ export const focusGame = {
   // 고른 조합마다 기록을 따로 쌓는다 (main.js가 읽는 규약)
   variantKey: state => keyOf(readSel(state)),
   variantLabel: labelOf,
+  // 오늘의 훈련이 집은 조합으로 열어준다
+  applyVariant(state, key) {
+    const ids = String(key).split('+').filter(id => STAGES.some(s => s.id === id));
+    if (ids.length) state.focusSel = ids;
+  },
 
   // 방법 화면에서 카운트다운 전에 고르게 한다 (게임 안에서 고르면 긴장이 끊긴다).
   // host = 붙일 DOM, onStart = 고르고 나서 부를 함수.
