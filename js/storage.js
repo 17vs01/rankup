@@ -242,19 +242,20 @@ export function applyDecay(s) {
   for (const id of DISC_IDS) {
     const d = s.disc[id];
     let discLoss = 0;
-    for (const v of Object.values(d.variants || {})) {
-      if (!v.sessions) continue;
+    const hit = [];   // 어느 조합이 얼마나 줄었는지 — 알림에서 이름을 부르려고
+    for (const [key, v] of Object.entries(d.variants || {})) {
       const loss = pendingDecay(v, now);
       if (loss > 0) {
         v.rating -= loss;
         v.lastDecay = now;
         discLoss += loss;
+        hit.push({ key, loss });
       }
     }
     if (discLoss > 0) {
       recomputeDisc(d);
       total += discLoss;
-      details.push({ id, loss: discLoss });
+      details.push({ id, loss: discLoss, variants: hit });
     }
   }
   if (total > 0) saveState(s);

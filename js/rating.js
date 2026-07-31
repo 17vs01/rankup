@@ -16,6 +16,9 @@ const K = 32;               // 판당 최대 변동폭 근처
 const DECAY_GRACE_H = 48;   // 부식 유예 (시간)
 const DECAY_PER_DAY = 8;    // 유예 이후 하루당 부식량
 const DECAY_FLOOR_GAP = 250; // 최고점 대비 최대 부식 폭
+// 몇 판 안 해본 조합은 녹슬지 않는다. 구경 삼아 한두 판 해본 걸 벌주면
+// 여러 조합을 시도할 이유가 없어진다 (집중력만 조합이 7개다).
+export const DECAY_MIN_SESSIONS = 3;
 
 export function tierOf(rating) {
   let t = TIERS[0], idx = 0;
@@ -46,6 +49,7 @@ export function ratingDelta(perf) {
 // 반환: 새로 적용할 부식량 (양수)
 export function pendingDecay(disc, now = Date.now()) {
   if (!disc.lastPlayed) return 0;
+  if ((disc.sessions || 0) < DECAY_MIN_SESSIONS) return 0;
   const graceEnd = disc.lastPlayed + DECAY_GRACE_H * 3600 * 1000;
   if (now <= graceEnd) return 0;
   const from = Math.max(graceEnd, disc.lastDecay || 0);
@@ -60,5 +64,6 @@ export function pendingDecay(disc, now = Date.now()) {
 // 부식까지 남은 시간(ms). 이미 부식 중이면 0
 export function timeToDecay(disc, now = Date.now()) {
   if (!disc.lastPlayed) return Infinity;
+  if ((disc.sessions || 0) < DECAY_MIN_SESSIONS) return Infinity;
   return Math.max(0, disc.lastPlayed + DECAY_GRACE_H * 3600 * 1000 - now);
 }

@@ -128,7 +128,12 @@ function renderHome() {
   // ----- 부식 알림: 붉은 상자 대신 조용한 한 줄 -----
   const $notice = $('#notice');
   if (decayed.length > 0) {
-    const names = decayed.map(d => `${GAMES.find(g => g.id === d.id).name} −${d.loss}`).join(', ');
+    const names = decayed.map(dd => {
+      const g = GAMES.find(x => x.id === dd.id);
+      // 어느 조합이 줄었는지까지 — 종목 이름만으로는 뭘 눌러야 할지 모른다
+      const vs = (dd.variants || []).filter(v => v.key).map(v => variantLabelOf(g, v.key));
+      return `${g.name}${vs.length ? `(${vs.join(', ')})` : ''} −${dd.loss}`;
+    }).join(', ');
     $notice.textContent = `쉬는 동안 LP가 줄었어요 · ${names}`;
     $notice.classList.remove('hidden');
   } else {
@@ -148,10 +153,9 @@ function renderHome() {
     const g = GAMES.find(x => x.id === id);
     const d = state.disc[id];
     const done = plan.done.includes(id);
-    const ttd = timeToDecay(d, now);
+    const note = decayNote(g, d, now);
     const why = d.sessions === 0 ? '아직 안 해본 종목'
-      : (d.lastPlayed && ttd <= 0) ? '지금 LP가 줄고 있어요'
-      : (d.lastPlayed && ttd < 12 * 3600 * 1000) ? `${fmtRemain(ttd)} 뒤 LP 감소`
+      : (note && note.urgent) ? note.text
       : '평균보다 뒤처져 있어요';
     const b = document.createElement('button');
     b.className = 'daily-item' + (done ? ' done' : '');
@@ -207,16 +211,15 @@ function renderHome() {
   for (const g of GAMES) {
     const d = state.disc[g.id];
     const t = tierOf(d.rating);
-    const ttd = timeToDecay(d, now);
-    const decaying = d.lastPlayed && ttd <= 0;
-    const decaySoon = d.lastPlayed && ttd > 0 && ttd < 12 * 3600 * 1000;
+    // 경고는 조합 단위다 — 어느 조합이 녹슬고 있는지까지 말해준다
+    const note = decayNote(g, d, now);
+    const warn = !!(note && note.urgent);
 
     // 안 해본 종목만 설명을 보여준다. 해본 뒤엔 군더더기가 된다.
     // 시간 기록이 있는 종목은 최고 기록을 보여준다 (더 자랑스러운 숫자)
     const rec = bestRecordOf(g.id);
     const sub = d.sessions === 0 ? g.desc
-      : decaying ? '지금 LP가 줄고 있어요'
-      : decaySoon ? `${fmtRemain(ttd)} 뒤 LP 감소`
+      : warn ? note.text
       : rec ? `${d.sessions}판 · ⏱ ${rec}`
       : `${d.sessions}판 · 최고 ${nf(d.best)}`;
 
@@ -227,7 +230,7 @@ function renderHome() {
       <span class="row-icon">${g.icon}</span>
       <span class="row-main">
         <span class="row-name" style="color:var(--text)">${g.name}${d.sessions === 0 ? '<i class="row-new">NEW</i>' : ''}</span>
-        <span class="row-sub${decaying || decaySoon ? ' row-warn' : ''}">${sub}</span>
+        <span class="row-sub${warn ? ' row-warn' : ''}">${sub}</span>
       </span>
       <span class="row-right">
         <span class="row-tier" style="color:${t.color}">${t.name}</span>
@@ -276,10 +279,12 @@ function pickDaily() {
   const avg = GAMES.reduce((a, g) => a + state.disc[g.id].rating, 0) / GAMES.length;
   const scored = GAMES.map(g => {
     const d = state.disc[g.id];
-    const ttd = timeToDecay(d, now);
+    // 급한 정도는 조합 단위로 잰다 (통합만 계속 해도 "우리말만"이 녹슬 수 있다)
+    const u = urgentVariant(d, now);
+    const ttd = u ? u.ttd : Infinity;
     let s = 0;
-    if (d.lastPlayed && ttd <= 0) s += 100;                        // 지금 줄고 있다
-    else if (d.lastPlayed && ttd < 12 * 3600 * 1000) s += 60;      // 곧 준다
+    if (ttd <= 0) s += 100;                        // 지금 줄고 있다
+    else if (ttd < 12 * 3600 * 1000) s += 60;      // 곧 준다
     if (d.sessions === 0) s += 45;                                  // 아직 안 해봤다
     s += Math.max(0, (avg - d.rating) / 12);                        // 평균보다 뒤처진 만큼
     if (d.lastPlayed) s += Math.min(25, (now - d.lastPlayed) / (12 * 3600 * 1000) * 5);
@@ -594,6 +599,28 @@ function variantLabelOf(game, key) {
     if (m) return m.name;
   }
   return key;
+}
+
+// 가장 급하게 녹슬고 있는 조합. 녹스는 조합이 하나도 없으면 null.
+// 부식은 조합 단위로 도는데 경고가 종목 단위면 "어느 걸 눌러야 하나"를 모른다.
+function urgentVariant(d, now = Date.now()) {
+  let best = null;
+  for (const [key, v] of Object.entries(d.variants || {})) {
+    const ttd = timeToDecay(v, now);
+    if (ttd === Infinity) continue;   // 안 해봤거나 아직 판수가 적은 조합
+    if (!best || ttd < best.ttd) best = { key, v, ttd };
+  }
+  return best;
+}
+
+// 홈 목록·오늘의 훈련이 함께 쓰는 경고 문구. 조합 이름을 앞에 붙인다.
+function decayNote(game, d, now = Date.now()) {
+  const u = urgentVariant(d, now);
+  if (!u) return null;
+  const name = u.key ? `${variantLabelOf(game, u.key)} · ` : '';
+  if (u.ttd <= 0) return { urgent: true, text: `${name}지금 LP가 줄고 있어요` };
+  if (u.ttd < 12 * 3600 * 1000) return { urgent: true, text: `${name}${fmtRemain(u.ttd)} 뒤 LP 감소` };
+  return { urgent: false, ttd: u.ttd };
 }
 
 // 표시 순서: 게임이 정한 순서 우선, 나머지는 판수 많은 순
