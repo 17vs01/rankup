@@ -4,7 +4,7 @@
 import { sfx } from '../audio.js';
 
 const DURATION = 60;
-const EXPECTED = 18;
+const EXPECTED = 14;
 
 const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = arr => arr[ri(0, arr.length - 1)];
@@ -54,9 +54,11 @@ export const compareGame = {
   icon: '⚖️',
   desc: '어느 쪽이 큰지 순간 판단',
   run(ctx) {
-    const L = Math.max(0, (ctx.rating - 800) / 200);
+    // 시작 레이팅(1000)이 레벨 0이 되게 잡는다. 800 기준으로 재면 첫 판부터
+    // 두 자리 곱셈이 나와서 "순간 판단"이 아니라 그냥 어려운 암산이 된다.
+    const L = Math.max(0, (ctx.rating - 1000) / 200);
     // 한 문제에 주어지는 시간. 레벨이 오르면 짧아진다.
-    const limitMs = Math.max(1400, 3200 - L * 220);
+    const limitMs = Math.max(1500, 4000 - L * 200);
 
     let correct = 0, wrong = 0, timeout = 0, streak = 0, bestStreak = 0;
     let cur = null, locked = true, barId = null, shownAt = 0;

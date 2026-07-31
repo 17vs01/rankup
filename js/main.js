@@ -35,7 +35,9 @@ const GROUPS = [
   { name: '기억',        games: [memoryGame, simonGame] },
   { name: '주의와 속도', games: [focusGame, schulteGame] },
   { name: '공간과 감각', games: [compassGame, eyeballGame, chronoGame] },
-  { name: '심리',        games: [unpredictGame] },
+  // 심리전이 아니다 — AI는 내가 누르기 전에 이미 예측을 정해두고, 내 지난
+  // 버릇을 통계로 읽는다. 실제로 재는 건 "내 패턴을 깰 수 있는가"다.
+  { name: '습관 깨기',   games: [unpredictGame] },
 ];
 const GAMES = GROUPS.flatMap(g => g.games);
 const $ = sel => document.querySelector(sel);
