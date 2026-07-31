@@ -173,6 +173,37 @@ html, body {
 .ov-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); transition: width .5s ease; }
 .ov-meta { font-size: 12px; color: var(--text-dim); margin-top: 10px; letter-spacing: .01em; }
 
+/* 대표 칭호 — 홈 상단 자랑 자리 */
+.ov-title {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+  font-size: 13px; font-weight: 700; color: var(--accent);
+  border: 1px solid var(--accent-soft); background: var(--accent-soft);
+  border-radius: 999px; padding: 6px 14px; letter-spacing: .01em;
+}
+.ov-title i { font-style: normal; font-size: 13px; }
+
+/* 기록 화면 · 대표 칭호 */
+.crown { display: flex; flex-direction: column; gap: 5px; }
+.crown-name { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -.01em; }
+.crown-from { font-size: 12.5px; color: var(--text-faint); }
+
+/* 기록 화면 · 종목별 칭호와 다음 목표 */
+.sect-title {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--accent);
+  border: 1px solid var(--accent-soft); background: var(--accent-soft);
+  border-radius: 4px; padding: 1px 6px; margin-left: 6px;
+}
+.sect-goal { font-size: 10.5px; font-weight: 500; color: var(--text-faint); margin-left: 6px; letter-spacing: 0; }
+
+/* 결과 화면 · 칭호 획득 */
+.result-title {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  margin-top: 14px; font-size: 12px; font-weight: 600; letter-spacing: .08em;
+  color: var(--text-faint);
+  animation: rise .5s ease;
+}
+.result-title b { font-size: 21px; font-weight: 700; color: var(--accent); letter-spacing: -.01em; }
+
 .notice {
   font-size: 12px; color: var(--text-dim); line-height: 1.6;
   border-left: 2px solid var(--bad); padding: 2px 0 2px 12px;

@@ -6,7 +6,8 @@ import { sfx } from '../audio.js';
 import { judge } from '../feedback.js';
 
 const DURATION = 60;
-const EXPECTED = 7;
+// 뜻을 읽고 단어를 "떠올린 뒤" 음절을 조립해야 해서 어휘력보다 한 문제가 길다
+const EXPECTED = 6;
 
 const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const shuffle = a => {

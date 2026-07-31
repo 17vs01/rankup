@@ -6,6 +6,7 @@ import { sfx } from './audio.js';
 import { exportState, readBackup, fmtDate } from './backup.js';
 import { RULES } from './rules.js';
 import { seededRandom, seedFor, dailyChallengeId } from './daily.js';
+import { titleOf, bestTitle, nextTitleTier } from './titles.js';
 import {
   initPlatform, inToss, getNickname, setLocalNickname, canEditNickname,
   submitScore, openLeaderboard, hasLeaderboard, onBack,
@@ -136,6 +137,16 @@ function renderHome() {
     : nextTier
       ? `${GAMES.length}종목 평균 · ${nextTier.name}까지 ${nf(nextTier.min - avg)}`
       : `${GAMES.length}종목 평균 · 최고 티어`;
+
+  // ----- 대표 칭호 (자랑거리) -----
+  const crown = myBestTitle();
+  const $ovTitle = $('#ov-title');
+  if (crown) {
+    $ovTitle.innerHTML = `<i>🏆</i>${crown.game.icon} ${crown.name}`;
+    $ovTitle.classList.remove('hidden');
+  } else {
+    $ovTitle.classList.add('hidden');
+  }
 
   // ----- 랭킹 카드 -----
   refreshRankCard();
@@ -648,6 +659,13 @@ function variantLabelOf(game, key) {
   return key;
 }
 
+// 지금 가진 칭호 중 대표 하나 (홈 상단·기록 화면에 자랑용으로 띄운다)
+function myBestTitle() {
+  return bestTitle(GAMES,
+    id => state.disc[id].rating,
+    id => tierOf(state.disc[id].rating).idx);
+}
+
 // 가장 급하게 녹슬고 있는 조합. 녹스는 조합이 하나도 없으면 null.
 // 부식은 조합 단위로 도는데 경고가 종목 단위면 "어느 걸 눌러야 하나"를 모른다.
 function urgentVariant(d, now = Date.now()) {
@@ -712,8 +730,13 @@ function endSession(game, result) {
       : `<div class="result-best">${mark} ${t.label} ${fmtDur(t.value, t.unit)} · 기록 ${fmtDur(d.records[t.key], t.unit)}</div>`);
   }
 
+  // 칭호는 종목 전체 레이팅(조합 평균)으로 판정한다 — 한 조합만 파서 얻는 게 아니게
+  const titleBefore = titleOf(game.id, tierOf(d.rating).idx);
   const { newRecord, variant } = recordSession(state, game.id, vKey,
     { score: result.score, delta, perf: result.perf });
+  const titleAfter = titleOf(game.id, tierOf(d.rating).idx);
+  const gotTitle = titleAfter && (!titleBefore || titleAfter.step > titleBefore.step)
+    ? titleAfter : null;
 
   // 오늘의 훈련 진행 + 주간 획득 LP + 오늘의 도전 완료 표시
   const justFinishedDaily = markDaily(game.id);
@@ -758,6 +781,7 @@ function endSession(game, result) {
     <div class="result-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP</div>
     <div class="result-tier" style="color:${afterTier.color}">${afterTier.name} · ${nf(after)}</div>
     <div class="result-bar"><i style="width:${tierProgress(after) * 100}%;background:${afterTier.color}"></i></div>
+    ${gotTitle ? `<div class="result-title">🏆 칭호 획득<b>${gotTitle.name}</b></div>` : ''}
     ${tierUp ? `<div class="result-tierup" style="color:${afterTier.color}">${afterTier.name} 승급</div>` : ''}
     ${tierDown ? `<div class="result-tierup" style="color:var(--bad)">${afterTier.name} 강등</div>` : ''}
     ${wasChallenge ? '<div class="result-daily done">🗓 오늘의 도전 완료</div>' : ''}
@@ -929,11 +953,13 @@ async function shareResult(game, result, delta, after) {
   const date = `${d.getMonth() + 1}/${d.getDate()}`;
   const plan = todayPlan();
   const bar = plan.ids.map(id => plan.done.includes(id) ? '🟩' : '⬜').join('');
+  const crown = myBestTitle();
   const text = [
     `RANKUP ${date} · ${game.icon} ${game.name}${dailyMode ? ' (오늘의 도전)' : ''}`,
     `${nf(result.score)}점 · ${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP · ${t.name} ${nf(after)}`,
+    crown ? `🏆 ${crown.name}` : null,
     `오늘의 훈련 ${bar}${state.streak > 0 ? ` · 🔥${state.streak}일` : ''}`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   try {
     if (navigator.share) { await navigator.share({ text }); return; }
     await navigator.clipboard.writeText(text);
@@ -1059,6 +1085,15 @@ function renderRecords() {
   const $sc = $('#records-scroll');
   const w = weeklyBucket();
   const sects = [];
+  // 대표 칭호 — 기록 화면 맨 위에서 먼저 자랑한다
+  const crown = myBestTitle();
+  sects.push(`<div class="sect">
+    <div class="sect-head">칭호</div>
+    ${crown
+      ? `<div class="crown"><span class="crown-name">${crown.game.icon} ${crown.name}</span>
+         <span class="crown-from">${crown.game.name} ${tierOf(crown.rating).name}</span></div>`
+      : '<p class="sect-desc" style="margin:0">종목 하나를 골드(1400 LP)까지 올리면 첫 칭호가 붙습니다.</p>'}
+  </div>`);
   sects.push(`<div class="sect">
     <div class="sect-head">최근 7일${nickname ? ` · ${nickname}` : ''}</div>
     ${weekChart()}
@@ -1105,7 +1140,13 @@ function renderRecords() {
           <span style="color:${vt.color}">${vt.name} · ${nf(v.rating)}<i>최고 ${nf(v.best)} · ${nf(v.sessions)}판</i></span>
         </div>`;
       }).join('')}</div>` : '';
-    sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name} · ${nf(d.sessions)}판</div>
+    // 이 종목에서 딴 칭호. 없으면 다음 칭호까지 얼마나 남았는지 알려준다.
+    const mine = titleOf(g.id, t.idx);
+    const nextT = nextTitleTier(t.idx);
+    const titleHtml = mine
+      ? `<span class="sect-title">${mine.name}</span>`
+      : (nextT !== null ? `<span class="sect-goal">${TIERS[nextT].name}까지 ${nf(TIERS[nextT].min - d.rating)}</span>` : '');
+    sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name} · ${nf(d.sessions)}판 ${titleHtml}</div>
       <div class="stat-rows">${lines.join('')}</div>${vHtml}</div>`);
   }
   // 별관은 랭크와 섞이지 않게 맨 아래에 따로 둔다

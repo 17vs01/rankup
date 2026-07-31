@@ -4,16 +4,19 @@
 import { sfx } from '../audio.js';
 import { judge } from '../feedback.js';
 
-const ROUNDS = 3;
+// 한 라운드가 30~60초라 3라운드는 한 판이 너무 길어진다. 2라운드로 끊는다.
+const ROUNDS = 2;
 
 // 레벨에 따라 격자가 커진다. 5×5가 고전적인 기본.
+// 시작 레이팅(1000)이 레벨 0. 25칸 → 36칸은 체감이 커서 천천히 올린다.
 function sizeFor(rating) {
-  const L = Math.max(0, (rating - 800) / 400);
+  const L = Math.max(0, (rating - 1000) / 450);
   return Math.min(7, 5 + Math.floor(L));
 }
 
-// 이 크기를 이만큼에 끝내면 기대치 (초). 칸이 늘면 제곱으로 어려워진다.
-const EXPECT = { 5: 26, 6: 42, 7: 62 };
+// 이 크기를 이만큼에 끝내면 기대치 (초).
+// 보통 성인의 5×5가 30~50초다. 26초로 잡으면 처음부터 거의 다 LP를 잃는다.
+const EXPECT = { 5: 36, 6: 58, 7: 85 };
 
 export const schulteGame = {
   id: 'schulte',
