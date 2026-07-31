@@ -26,14 +26,18 @@ import { simonGame } from './games/simon.js';
 import { compareGame } from './games/compare.js';
 import { anagramGame } from './games/anagram.js';
 
-// 랭크 종목. 스도쿠는 여기 없다 — 한 판 5~20분이라 "60초 랭크전"의 LP 경제와
-// 맞지 않아 랭크 밖 별관으로 뺐다 (아래 '스도쿠 별관' 참고).
-const GAMES = [
-  lexiGame, anagramGame, mathGame, compareGame,
-  memoryGame, simonGame, focusGame, schulteGame,
-  unpredictGame, chronoGame, compassGame, eyeballGame,
-  t24Game,
+// 랭크 종목을 비슷한 능력끼리 묶는다. 목록 순서와 소제목이 여기서 나온다.
+// 스도쿠는 여기 없다 — 한 판 5~20분이라 "60초 랭크전"의 LP 경제와 맞지 않아
+// 랭크 밖 별관으로 뺐다 (아래 '스도쿠 별관' 참고).
+const GROUPS = [
+  { name: '말과 글',     games: [lexiGame, anagramGame] },
+  { name: '수와 셈',     games: [mathGame, compareGame, t24Game] },
+  { name: '기억',        games: [memoryGame, simonGame] },
+  { name: '주의와 속도', games: [focusGame, schulteGame] },
+  { name: '공간과 감각', games: [compassGame, eyeballGame, chronoGame] },
+  { name: '심리',        games: [unpredictGame] },
 ];
+const GAMES = GROUPS.flatMap(g => g.games);
 const $ = sel => document.querySelector(sel);
 
 let state = loadState();
@@ -218,7 +222,16 @@ function renderHome() {
 
   const $list = $('#list');
   $list.innerHTML = '';
-  for (const g of GAMES) {
+  for (const group of GROUPS) {
+    // 비슷한 능력끼리 묶어서 보여준다. 13줄이 한 덩어리면 고르기 어렵다.
+    const head = document.createElement('div');
+    head.className = 'list-group';
+    head.textContent = group.name;
+    $list.appendChild(head);
+    for (const g of group.games) renderRow(g);
+  }
+
+  function renderRow(g) {
     const d = state.disc[g.id];
     const t = tierOf(d.rating);
     // 경고는 조합 단위다 — 어느 조합이 녹슬고 있는지까지 말해준다
@@ -259,6 +272,7 @@ function renderHome() {
     });
     $list.appendChild(row);
   }
+
 
   // ----- 별관: 스도쿠 (랭크 밖) -----
   const sp = state.sudokuProg;

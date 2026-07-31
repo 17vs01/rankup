@@ -281,6 +281,12 @@ html, body {
   color: var(--text-faint); padding-bottom: 4px;
 }
 .list { display: flex; flex-direction: column; }
+/* 비슷한 능력끼리 묶는 소제목 */
+.list-group {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .14em;
+  color: var(--text-faint); padding: 20px 0 5px;
+}
+.list-group:first-child { padding-top: 2px; }
 .row {
   position: relative; width: 100%; text-align: left; cursor: pointer;
   background: none; border: none; border-top: 1px solid var(--line);
