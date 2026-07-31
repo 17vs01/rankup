@@ -106,7 +106,11 @@ export const t24Game = {
         <div class="t24-sol" id="t24-sol"></div>
         <button class="btn-primary" id="t24-ok">확인했어요</button>
       </div>
+      <div class="t24-reveal hidden" id="t24-next">
+        <button class="btn-primary" id="t24-go">확인 — 다음 문제</button>
+      </div>
       <div class="t24-fb" id="t24-fb"></div>
+      <button class="t24-toggle" id="t24-autobtn"></button>
     `;
     const $round = ctx.body.querySelector('#t24-round');
     const $target = ctx.body.querySelector('#t24-target');
@@ -116,6 +120,24 @@ export const t24Game = {
     const $reveal = ctx.body.querySelector('#t24-reveal');
     const $sol = ctx.body.querySelector('#t24-sol');
     const $fb = ctx.body.querySelector('#t24-fb');
+    const $next = ctx.body.querySelector('#t24-next');
+    const $autobtn = ctx.body.querySelector('#t24-autobtn');
+
+    // 정답(성공) 공개 후 자동으로 다음 문제로 넘어갈지. 끄면 "확인"을 눌러야 넘어간다.
+    let autoNext = ctx.state.t24Auto !== false;   // 기본 ON
+    function renderAutoBtn() {
+      $autobtn.textContent = autoNext ? '정답 후 자동 넘기기 · ON' : '정답 후 자동 넘기기 · OFF';
+      $autobtn.classList.toggle('off', !autoNext);
+    }
+    renderAutoBtn();
+    $autobtn.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      autoNext = !autoNext;
+      ctx.state.t24Auto = autoNext;
+      ctx.persist();
+      sfx.tick();
+      renderAutoBtn();
+    });
 
     // ---------- 타임어택 시계 ----------
     function startLevelClock() {
@@ -174,6 +196,7 @@ export const t24Game = {
       history.length = 0;
       startAt = performance.now();
       $reveal.classList.add('hidden');
+      $next.classList.add('hidden');
       $actions.classList.remove('hidden');
       $round.textContent = attack
         ? `${level}단계 · ${round} / ${ROUNDS}문제`
@@ -220,7 +243,14 @@ export const t24Game = {
           judge(ctx.body, true, `${target} 완성! (${took.toFixed(1)}초)`);
           $fb.textContent = `성공! ${fmt(tiles[0])} = ${target}  (${took.toFixed(1)}초)`;
           $fb.className = 't24-fb good';
-          ctx.delay(newRound, 900);
+          if (autoNext) {
+            ctx.delay(newRound, 900);
+          } else {
+            // 자동 넘기기 OFF: 확인을 눌러야 다음 문제로 (타임어택은 그동안에도 시계가 간다)
+            revealed = true;   // 대기 중 타일·연산 입력 잠금
+            $actions.classList.add('hidden');
+            $next.classList.remove('hidden');
+          }
         } else {
           sfx.bad();
           judge(ctx.body, false, `목표는 ${target} — 되돌리세요`);
@@ -267,6 +297,16 @@ export const t24Game = {
       if (!revealed || finished) return;
       revealed = false;
       $reveal.classList.add('hidden');
+      $actions.classList.remove('hidden');
+      newRound();
+    });
+
+    // 성공 후 확인 (자동 넘기기 OFF일 때만 보인다)
+    ctx.body.querySelector('#t24-go').addEventListener('pointerdown', e => {
+      e.preventDefault();
+      if (finished) return;
+      revealed = false;
+      $next.classList.add('hidden');
       $actions.classList.remove('hidden');
       newRound();
     });

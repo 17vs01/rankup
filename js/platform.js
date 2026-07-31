@@ -86,6 +86,38 @@ export async function submitScore(value) {
   }
 }
 
+/**
+ * 리더보드 상위권·내 순위 조회.
+ * 현재 확인된 앱인토스 SDK에는 리더보드를 "읽는" API가 문서화돼 있지 않다
+ * (제출 setLeaderboardScore / 화면 열기 openLeaderboard 뿐). 그래서 알려진
+ * 이름 후보를 방어적으로 시도하고, 없으면 null을 돌려준다 — 화면은 null이면
+ * "전체 순위" 버튼으로 안내한다. SDK가 읽기 API를 열면 여기만 고치면 된다.
+ * 반환: { myRank: number|null, top: [{rank, name, score}] | null } | null
+ */
+export async function getLeaderboardInfo() {
+  const api = sdk?.Game;
+  if (!api) return null;
+  for (const fn of ['getLeaderboard', 'getLeaderboardRank', 'getLeaderboardRanks', 'getLeaderboardScores']) {
+    if (typeof api[fn] !== 'function') continue;
+    try {
+      const r = await api[fn]({ count: 3 });
+      if (!r) continue;
+      const list = r.ranks || r.list || r.entries || r.scores || (Array.isArray(r) ? r : null);
+      const top = Array.isArray(list) && list.length
+        ? list.slice(0, 3).map((e, i) => ({
+          rank: e.rank || i + 1,
+          name: e.nickname || e.name || e.userName || '?',
+          score: e.score ?? e.value ?? null,
+        }))
+        : null;
+      const myRank = (typeof r.myRank === 'number' && r.myRank)
+        || (typeof r.rank === 'number' && r.rank) || null;
+      if (top || myRank) return { myRank, top };
+    } catch { /* 다음 후보 이름으로 */ }
+  }
+  return null;
+}
+
 /** 토스 리더보드 화면을 띄운다 */
 export async function openLeaderboard() {
   if (!sdk?.Game?.openLeaderboard) return false;

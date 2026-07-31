@@ -6,9 +6,10 @@ import { RULES } from './rules.js';
 import {
   initPlatform, inToss, getNickname, setLocalNickname, canEditNickname,
   compositeScore, submitScore, openLeaderboard, hasLeaderboard, onBack,
+  getLeaderboardInfo,
 } from './platform.js';
 import { mathGame } from './games/math.js';
-import { vocabGame } from './games/vocab.js';
+import { lexiGame } from './games/lexi.js';
 import { memoryGame } from './games/memory.js';
 import { focusGame } from './games/focus.js';
 import { unpredictGame } from './games/unpredict.js';
@@ -18,11 +19,10 @@ import { eyeballGame } from './games/eyeball.js';
 import { sudokuGame } from './games/sudoku.js';
 import { chainGame } from './games/chain.js';
 import { t24Game } from './games/t24.js';
-import { korvocabGame } from './games/korvocab.js';
 
 const GAMES = [
   sudokuGame, chainGame,
-  korvocabGame, vocabGame, mathGame, memoryGame, focusGame,
+  lexiGame, mathGame, memoryGame, focusGame,
   unpredictGame, chronoGame, compassGame, eyeballGame,
   t24Game,
 ];
@@ -119,6 +119,9 @@ function renderHome() {
     : nextTier
       ? `${GAMES.length}종목 평균 · ${nextTier.name}까지 ${nf(nextTier.min - avg)}`
       : `${GAMES.length}종목 평균 · 최고 티어`;
+
+  // ----- 랭킹 카드 -----
+  refreshRankCard();
 
   // ----- 부식 알림: 붉은 상자 대신 조용한 한 줄 -----
   const $notice = $('#notice');
@@ -467,6 +470,46 @@ async function refreshNickname() {
   try { nickname = await getNickname(); } catch { nickname = null; }
 }
 
+// ---------- 랭킹 카드 (홈) ----------
+// 내 종합 점수는 항상 보여준다. 순위·상위 3명은 SDK가 읽기 API를 줄 때만
+// 채워지고, 없으면 "전체 순위" 버튼으로 안내한다 (platform.getLeaderboardInfo 참고).
+let lbInfo = null, lbFetchedAt = 0;
+const escapeHtml = s => String(s).replace(/[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function renderRankCard() {
+  const comp = compositeScore(state, GAMES.map(g => g.id));
+  const me = nickname || '나';
+  $('#rank-mine').innerHTML = `
+    <span class="rm-rank">${escapeHtml(me)}${lbInfo && lbInfo.myRank ? ` · ${nf(lbInfo.myRank)}위` : ''}</span>
+    <span class="rm-score">${nf(comp)}점</span>`;
+  const $top = $('#rank-top');
+  if (lbInfo && lbInfo.top) {
+    const medals = ['🥇', '🥈', '🥉'];
+    $top.innerHTML = lbInfo.top.map((e, i) => `
+      <div class="rank-row">
+        <span class="rr-medal">${medals[(e.rank || i + 1) - 1] || ''}</span>
+        <span class="rr-name">${escapeHtml(e.name)}</span>
+        ${e.score !== null ? `<span class="rr-score">${nf(Number(e.score) || 0)}점</span>` : ''}
+      </div>`).join('');
+  } else if (inToss()) {
+    $top.innerHTML = '<div class="rank-note">1·2·3위는 오른쪽 위 "전체 순위"에서 확인하세요</div>';
+  } else {
+    $top.innerHTML = '<div class="rank-note">토스 미니앱에서 열면 내 순위와 1·2·3위가 여기에 표시됩니다</div>';
+  }
+}
+
+function refreshRankCard() {
+  renderRankCard();
+  // 토스 안에서만, 1분에 한 번만 다시 물어본다
+  if (inToss() && Date.now() - lbFetchedAt > 60000) {
+    lbFetchedAt = Date.now();
+    getLeaderboardInfo().then(info => {
+      if (info) { lbInfo = info; renderRankCard(); }
+    });
+  }
+}
+
 function renderRecords() {
   applyDecay(state);
   const $sc = $('#records-scroll');
@@ -688,6 +731,6 @@ renderHome();
 
 initPlatform().then(() => {
   onBack(handleBack);
-  refreshNickname();
+  refreshNickname().then(refreshRankCard);   // 별명·순위가 오면 카드 갱신
   if (hasLeaderboard()) $('#btn-leaderboard').classList.remove('hidden');
 });

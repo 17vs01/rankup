@@ -4,7 +4,7 @@ import { START_RATING, pendingDecay } from './rating.js';
 const KEY = 'rankup-state-v1';
 
 const DISC_IDS = [
-  'math', 'vocab', 'korvocab', 'memory', 'focus',
+  'math', 'lexi', 'memory', 'focus',
   'unpredict', 'chrono', 'compass', 'eyeball',
   'sudoku', 'chain', 't24',
 ];
@@ -43,6 +43,24 @@ export function loadState() {
   let s;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch { s = null; }
   if (!s || !s.disc) s = freshState();
+  // 이관: 어휘(vocab) + 우리말(korvocab) → 어휘력(lexi)으로 통합.
+  // 기존 두 종목의 LP를 판수 가중 평균으로 물려받는다. 라이트너 데이터
+  // (s.vocab / s.korvocab)는 lexi가 그대로 이어 쓴다.
+  if (!s.disc.lexi && s.disc.vocab && s.disc.korvocab
+    && (s.disc.vocab.sessions > 0 || s.disc.korvocab.sessions > 0)) {
+    const a = s.disc.vocab, b = s.disc.korvocab;
+    const w = Math.max(1, (a.sessions || 0) + (b.sessions || 0));
+    s.disc.lexi = {
+      rating: Math.round(((a.rating || START_RATING) * (a.sessions || 0)
+        + (b.rating || START_RATING) * (b.sessions || 0)) / w) || START_RATING,
+      peak: Math.max(a.peak || START_RATING, b.peak || START_RATING),
+      lastPlayed: Math.max(a.lastPlayed || 0, b.lastPlayed || 0),
+      lastDecay: Math.max(a.lastDecay || 0, b.lastDecay || 0),
+      sessions: (a.sessions || 0) + (b.sessions || 0),
+      best: Math.max(a.best || 0, b.best || 0),
+      records: {},
+    };
+  }
   // 예전 저장본·불완전한 백업 파일 모두 여기서 보강한다.
   // 필드 하나가 빠져도 NaN 오염이나 크래시 없이 새 값으로 채워져야 한다.
   const num = (v, dflt) => (typeof v === 'number' && Number.isFinite(v) ? v : dflt);
