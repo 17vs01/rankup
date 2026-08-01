@@ -19,8 +19,12 @@ const shuffle = a => {
 };
 
 // ---------- 문제 가족 ----------
-// 각 생성기는 { q, ans, trap, unit, why } 반환.
-// ans/trap은 숫자, unit은 보기에 붙는 단위. why는 이 문제의 숫자로 쓴 풀이.
+// 각 생성기는 { q, ans, trap, alts, unit, why } 반환.
+// trap = 직관이 가장 먼저 내미는 오답 (걸리면 따로 짚어준다)
+// alts = 그다음으로 그럴듯한 오답들. 보기 넷은 여기서 채운다.
+//
+// alts를 아무 숫자로 채우면 함정이 작동하지 않는다. 양말 문제에서 "전체 40짝이
+// 낚시"라고 해설하려면 보기에 40이 있어야 한다 — 없으면 낚일 기회가 없다.
 
 const COLOR_SETS = [['흰색', '검은색'], ['흰색', '검은색', '회색'], ['빨간색', '파란색', '노란색', '초록색']];
 
@@ -31,7 +35,8 @@ function genPigeon() {
   const T = ri(4, 9) * c * 2;   // 전체 개수는 낚시용
   return {
     q: `서랍에 ${colors.join('·')} 양말 ${T}짝이 뒤섞여 있습니다. 보지 않고 한 짝씩 꺼낼 때, 같은 색 두 짝을 확신하려면 최소 몇 짝을 꺼내야 할까요?`,
-    ans: c + 1, trap: 2, unit: '짝',
+    // 낚시는 "전체 개수"다 — 절반쯤 꺼내야 할 것 같고, 최악이면 다 꺼내야 할 것 같다
+    ans: c + 1, trap: T / 2 + 1, alts: [T, 2, T / 2], unit: '짝',
     why: `최악의 경우를 생각하세요. 색이 ${c}가지니 ${c}짝이 전부 다른 색일 수 있습니다. 하지만 ${c + 1}짝째는 어떤 색이든 이미 나온 색과 겹칠 수밖에 없습니다. 전체 ${T}짝이라는 숫자는 답과 무관한 낚시입니다.`,
   };
 }
@@ -43,7 +48,7 @@ function genPigeonK() {
   const ans = c * (k - 1) + 1;
   return {
     q: `상자에 ${colors.join('·')} 구슬이 잔뜩 들어 있습니다. 보지 않고 꺼낼 때, 같은 색 구슬 ${k}개를 확신하려면 최소 몇 개를 꺼내야 할까요?`,
-    ans, trap: k + 1, unit: '개',
+    ans, trap: c * k, alts: [k, k + 1, ans + c], unit: '개',
     why: `최악의 경우: 색마다 ${k - 1}개씩, 총 ${c}×${k - 1} = ${c * (k - 1)}개를 꺼내고도 아직 ${k}개가 된 색이 없습니다. 그다음 한 개는 어느 색이든 ${k}개째가 됩니다. 그래서 ${ans}개.`,
   };
 }
@@ -54,7 +59,8 @@ function genPigeonSpecific() {
   const ans = b + 2;
   return {
     q: `서랍에 빨간 양말 ${r}짝과 파란 양말 ${b}짝이 섞여 있습니다. 보지 않고 꺼낼 때, "빨간" 양말 두 짝을 확신하려면 최소 몇 짝을 꺼내야 할까요?`,
-    ans, trap: 3, unit: '짝',
+    // 색만 맞추면 되는 문제(답 3짝)로 착각하는 게 가장 흔하다
+    ans, trap: 3, alts: [r + 2, r + b, b], unit: '짝',
     why: `"같은 색 아무거나"가 아니라 "꼭 빨간색"입니다. 재수 없으면 파란 ${b}짝을 전부 먼저 꺼낼 수 있습니다. 그 뒤 두 짝이 반드시 빨강이므로 ${b} + 2 = ${ans}짝. 색만 맞추면 되는 문제(답 3짝)와 다른 점이 여기 있습니다.`,
   };
 }
@@ -72,7 +78,7 @@ function genBatBall() {
   const S = D + 2 * x;
   return {
     q: `${p.sum} ${S.toLocaleString()}원입니다. ${p.more} ${D.toLocaleString()}원 더 비쌉니다. ${p.ask} 얼마일까요?`,
-    ans: x, trap: S - D, unit: '원',
+    ans: x, trap: S - D, alts: [S / 2, D, x * 2], unit: '원',
     why: `${p.b}가 ${S - D}원이면 ${p.a}는 ${(S - D + D).toLocaleString()}원이라 합이 ${(2 * (S - D) + D).toLocaleString()}원이 되어 어긋납니다. ${p.b}를 x원이라 하면 ${p.a}는 x+${D.toLocaleString()}원, 합은 2x+${D.toLocaleString()}원. 2x = ${2 * x}이므로 x = ${x}원.`,
   };
 }
@@ -83,7 +89,8 @@ function genLily() {
   const half = Math.random() < 0.6;
   return {
     q: `연못의 수련이 매일 2배로 넓어집니다. ${n}일째에 연못을 전부 덮었다면, ${half ? '절반' : '4분의 1'}을 덮은 날은 며칠째일까요?`,
-    ans: half ? n - 1 : n - 2, trap: Math.round(n / (half ? 2 : 4)), unit: '일째',
+    ans: half ? n - 1 : n - 2, trap: Math.round(n / (half ? 2 : 4)),
+    alts: [n, Math.round(n / (half ? 2 : 4)) + 1, half ? n - 2 : n - 1], unit: '일째',
     why: `앞에서부터 세면 함정에 빠집니다. 거꾸로 보세요 — 매일 2배가 된다는 건 "하루 전에는 절반이었다"는 뜻입니다. ${n}일째 가득 → ${n - 1}일째 절반${half ? '' : ` → ${n - 2}일째 4분의 1`}. 성장은 마지막에 몰아칩니다.`,
   };
 }
@@ -94,7 +101,7 @@ function genMachine() {
   const N = pick([50, 100, 200]);
   return {
     q: `기계 ${m}대가 ${m}분 동안 부품 ${m}개를 만듭니다. 기계 ${N}대가 부품 ${N}개를 만드는 데는 몇 분이 걸릴까요?`,
-    ans: m, trap: N, unit: '분',
+    ans: m, trap: N, alts: [N / m, N * m, N / 2], unit: '분',
     why: `기계 1대의 속도를 보세요. ${m}대가 ${m}분에 ${m}개를 만드니, 1대는 ${m}분에 1개를 만듭니다. 기계가 ${N}대면 ${m}분 동안 정확히 ${N}개가 나옵니다. 대수와 개수가 같이 늘면 시간은 그대로입니다.`,
   };
 }
@@ -109,7 +116,8 @@ function genFence() {
     q: circular
       ? `둘레가 ${L}m인 원형 연못을 따라 ${g}m 간격으로 나무를 심습니다. 나무는 몇 그루 필요할까요?`
       : `길이 ${L}m인 길의 처음부터 끝까지 ${g}m 간격으로 나무를 심습니다. 나무는 몇 그루 필요할까요?`,
-    ans: circular ? n : n + 1, trap: circular ? n + 1 : n, unit: '그루',
+    ans: circular ? n : n + 1, trap: circular ? n + 1 : n,
+    alts: [L / 2, n + 2, n - 1], unit: '그루',
     why: circular
       ? `${L} ÷ ${g} = ${n}개의 간격이 생깁니다. 원에서는 끝이 처음과 이어져 있어서 나무 수 = 간격 수, ${n}그루면 됩니다. 직선이었다면 ${n + 1}그루가 필요했을 겁니다.`
       : `${L} ÷ ${g} = ${n}은 나무 사이 "간격"의 수입니다. 맨 처음 자리에도 나무가 서야 하니 간격보다 하나 많은 ${n + 1}그루가 필요합니다. 손가락 5개 사이 틈이 4개인 것과 같은 이치입니다.`,
@@ -122,7 +130,7 @@ function genLog() {
   const t = pick([2, 3, 4, 5]);
   return {
     q: `통나무를 한 번 자르는 데 ${t}분이 걸립니다. 통나무 하나를 ${n}토막으로 만들려면 몇 분이 걸릴까요?`,
-    ans: (n - 1) * t, trap: n * t, unit: '분',
+    ans: (n - 1) * t, trap: n * t, alts: [(n + 1) * t, (n - 2) * t, n], unit: '분',
     why: `${n}토막을 만드는 데 필요한 칼질은 ${n}번이 아니라 ${n - 1}번입니다 — 마지막 칼질 한 번이 두 토막을 만들기 때문입니다. ${n - 1} × ${t}분 = ${(n - 1) * t}분.`,
   };
 }
@@ -134,7 +142,8 @@ function genClock() {
   const j = ri(k + 3, 12);
   return {
     q: `괘종시계가 ${k}시에 종을 ${k}번 치는 데 ${i * (k - 1)}초가 걸립니다. ${j}시에 ${j}번 치는 데는 몇 초가 걸릴까요?`,
-    ans: i * (j - 1), trap: Math.round(i * (k - 1) / k * j), unit: '초',
+    ans: i * (j - 1), trap: Math.round(i * (k - 1) / k * j),
+    alts: [i * j, i * (k - 1) * 2, i * (j - 1) + i], unit: '초',
     why: `시간이 걸리는 건 종소리가 아니라 종소리 "사이"입니다. ${k}번 치면 간격은 ${k - 1}개 → 간격 하나가 ${i}초. ${j}번 치면 간격이 ${j - 1}개이므로 ${i} × ${j - 1} = ${i * (j - 1)}초. 소리 개수로 비례식을 세우면 틀립니다.`,
   };
 }
@@ -144,7 +153,8 @@ function genTournament() {
   const n = ri(20, 90);
   return {
     q: `${n}개 팀이 토너먼트(지면 탈락)로 우승팀을 가립니다. 부전승 유무와 상관없이, 우승팀이 나올 때까지 총 몇 경기가 필요할까요?`,
-    ans: n - 1, trap: Math.round(n / 2), unit: '경기',
+    ans: n - 1, trap: Math.round(n / 2),
+    alts: [n, Math.round(n / 2) + Math.round(n / 4), n * 2], unit: '경기',
     why: `대진표를 그릴 필요가 없습니다. 경기 하나가 끝날 때마다 정확히 한 팀이 탈락합니다. 우승팀 하나만 남으려면 ${n - 1}팀이 탈락해야 하므로 경기도 정확히 ${n - 1}번입니다.`,
   };
 }
@@ -154,7 +164,8 @@ function genHandshake() {
   const n = ri(6, 15);
   return {
     q: `모임에 온 ${n}명이 서로 빠짐없이 한 번씩 악수를 나눕니다. 악수는 모두 몇 번 일어날까요?`,
-    ans: n * (n - 1) / 2, trap: n * (n - 1), unit: '번',
+    ans: n * (n - 1) / 2, trap: n * (n - 1),
+    alts: [Math.round(n * n / 2), n * (n - 1) / 2 + n, n], unit: '번',
     why: `한 사람이 ${n - 1}번씩 하니 ${n} × ${n - 1} = ${n * (n - 1)}번처럼 보이지만, 그 계산은 모든 악수를 두 사람 입장에서 두 번씩 센 것입니다. 절반으로 나눠 ${n * (n - 1) / 2}번.`,
   };
 }
@@ -167,7 +178,8 @@ function genSnail() {
   const d = a + (a - b) * k;
   return {
     q: `깊이 ${d}m 우물 바닥의 달팽이가 낮에 ${a}m 오르고 밤에 ${b}m 미끄러집니다. 며칠째 낮에 우물을 빠져나올까요?`,
-    ans: k + 1, trap: Math.ceil(d / (a - b)), unit: '일째',
+    ans: k + 1, trap: Math.ceil(d / (a - b)),
+    alts: [k, Math.ceil(d / a), d], unit: '일째',
     why: `하루 순이익 ${a - b}m로 나누면 ${Math.ceil(d / (a - b))}일이 나오지만, 그건 마지막 날에도 미끄러진다고 계산한 것입니다. 꼭대기에 닿는 순간 빠져나오므로 마지막 ${a}m는 하루 만에 끝납니다. ${d} − ${a} = ${d - a}m를 하루 ${a - b}m씩 ${k}일 오르고, 다음 날 나갑니다 → ${k + 1}일째.`,
   };
 }
@@ -178,7 +190,7 @@ function genSpeed() {
   const [a, b, h] = pick(SPEED_PAIRS);
   return {
     q: `같은 길을 갈 때는 시속 ${a}km, 올 때는 시속 ${b}km로 왕복했습니다. 왕복 전체의 평균 속도는 시속 몇 km일까요?`,
-    ans: h, trap: (a + b) / 2, unit: 'km',
+    ans: h, trap: (a + b) / 2, alts: [a, b, Math.round((a + b) / 2) + 5], unit: 'km',
     why: `거리는 같아도 걸린 시간이 다릅니다. 느린 시속 ${Math.min(a, b)}km 구간에서 더 오래 달렸기 때문에 평균은 단순 평균 ${(a + b) / 2}보다 느린 쪽으로 끌립니다. 평균 속도 = 전체 거리 ÷ 전체 시간 = 2×${a}×${b} ÷ (${a}+${b}) = ${h}km/h.`,
   };
 }
@@ -190,7 +202,8 @@ function genScale() {
   const n = ri(lo, Math.pow(3, ans));
   return {
     q: `똑같이 생긴 동전 ${n}개 중 하나만 조금 가볍습니다. 양팔저울로 반드시 찾아내려면 최소 몇 번 달아야 할까요?`,
-    ans, trap: Math.ceil(Math.log2(n)), unit: '번',
+    ans, trap: Math.ceil(Math.log2(n)),
+    alts: [n - 1, Math.ceil(n / 2), ans + 1], unit: '번',
     why: `반씩 나눠 달면 ${Math.ceil(Math.log2(n))}번쯤 걸리지만 그건 저울을 절반만 쓰는 겁니다. 한 번 달면 결과가 세 가지입니다 — 왼쪽이 가볍다·오른쪽이 가볍다·평형(안 단 무더기에 있다). 세 무더기로 나누면 한 번에 후보가 3분의 1로 줄어, 3^${ans} = ${Math.pow(3, ans)} ≥ ${n}이니 ${ans}번이면 충분합니다.`,
   };
 }
@@ -213,13 +226,21 @@ const FAMILIES = [
   ['pigeon3', 3, genPigeonSpecific],
 ];
 
-// 보기 4개: 정답 + 함정 + 그럴듯한 채움 2개
+// 보기 4개 = 정답 + 함정 + 그 가족이 지정한 오답들.
+// 정수가 아니거나 정답과 겹치는 후보는 버린다.
 function choicesFor(p) {
-  const out = [p.ans, p.trap];
+  const out = [p.ans];
+  const add = v => {
+    const n = Math.round(v);
+    if (Number.isFinite(n) && n > 0 && !out.includes(n)) out.push(n);
+  };
+  add(p.trap);
+  for (const c of p.alts || []) { if (out.length >= 4) break; add(c); }
+  // 그래도 모자라면 정답 근처 값으로 채운다 (거의 안 쓰인다)
   const d = Math.max(1, Math.round(p.ans * 0.3));
-  for (const c of [p.ans + d, p.ans - d, p.trap + d, p.ans + 1, p.ans - 1, p.ans + d + 1]) {
-    if (c > 0 && !out.includes(c)) out.push(c);
-    if (out.length === 4) break;
+  for (const c of [p.ans + d, p.ans - d, p.ans + 1, p.ans - 1, p.ans + 2 * d]) {
+    if (out.length >= 4) break;
+    add(c);
   }
   return shuffle(out);
 }
