@@ -27,13 +27,15 @@ import { simonGame } from './games/simon.js';
 import { compareGame } from './games/compare.js';
 import { anagramGame } from './games/anagram.js';
 import { patternGame } from './games/pattern.js';
+import { trapGame } from './games/trap.js';
 
 // 랭크 종목을 비슷한 능력끼리 묶는다. 목록 순서와 소제목이 여기서 나온다.
 // 스도쿠는 여기 없다 — 한 판 5~20분이라 "60초 랭크전"의 LP 경제와 맞지 않아
 // 랭크 밖 별관으로 뺐다 (아래 '스도쿠 별관' 참고).
 const GROUPS = [
   { name: '말과 글',     games: [lexiGame, anagramGame] },
-  { name: '수와 셈',     games: [mathGame, compareGame, patternGame, t24Game] },
+  { name: '수와 셈',     games: [mathGame, compareGame, t24Game] },
+  { name: '논리와 추리', games: [patternGame, trapGame] },
   { name: '기억',        games: [memoryGame, simonGame] },
   { name: '주의와 속도', games: [focusGame, schulteGame] },
   { name: '공간과 감각', games: [compassGame, eyeballGame, chronoGame] },
@@ -97,6 +99,7 @@ const TIME_RECORDS = {
   anagram: { unit: 'count', title: '내 기록', order: [['ag_streak', '최다 연속']] },
   unpredict: { unit: 'count', title: '내 기록', order: [['ai_rate_min', '최저 AI 적중률', 'pct'], ['evade_best', '최다 연속 회피']] },
   pattern: { unit: 'count', title: '내 기록', order: [['pt_streak', '최다 연속']] },
+  trap:    { unit: 'sec', title: '내 기록', order: [['time_perfect', '5문제 전원 정답']] },
 };
 
 // 홈 목록 한 줄에 넣을 대표 기록 (가장 어려운 난이도 우선)

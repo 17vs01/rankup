@@ -1,5 +1,5 @@
 // 오프라인 캐시 서비스워커
-const CACHE = 'rankup-v28';
+const CACHE = 'rankup-v29';
 const ASSETS = [
   '.',
   'index.html',
@@ -25,6 +25,7 @@ const ASSETS = [
   'js/games/focus.js',
   'js/games/unpredict.js',
   'js/games/pattern.js',
+  'js/games/trap.js',
   'js/games/chrono.js',
   'js/games/compass.js',
   'js/games/eyeball.js',
