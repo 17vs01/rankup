@@ -1167,35 +1167,19 @@ html, body {
 .ag-fb { font-size: 13px; color: var(--text-dim); min-height: 20px; text-align: center; word-break: keep-all; }
 .ag-fb.bad { color: var(--bad); }
 
-/* ---------- 🧀 치즈 도둑 ---------- */
-.cz-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-  width: 100%; max-width: 330px; aspect-ratio: 1;
+/* ---------- 🕵️ 규칙 찾기 ---------- */
+.pt-seq {
+  display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap;
+  gap: 2px 6px; font-size: 32px; font-weight: 500; padding: 0 10px;
 }
-.cz-cell {
-  position: relative; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 12px; display: flex; align-items: center; justify-content: center;
-  font-size: 27px; transition: background .12s, border-color .12s;
+.pt-seq i { font-style: normal; color: var(--text-faint); font-size: 20px; }
+.pt-seq .pt-q { color: var(--accent); font-weight: 700; }
+.pt-fb {
+  font-size: 13px; color: var(--text-dim); min-height: 40px;
+  text-align: center; word-break: keep-all; line-height: 1.5; padding: 0 16px;
 }
-.cz-cell.can { border-color: var(--line-2); cursor: pointer; }
-.cz-cell.can:active { background: var(--surface-2); }
-.cz-cell.hit { background: var(--bad-soft); border-color: var(--bad); }
-.cz-paw {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: 22px; opacity: 0; animation: pawPop .45s ease;
-  pointer-events: none;
-}
-.cz-paw.hit { font-size: 30px; animation-duration: .7s; }
-@keyframes pawPop {
-  0% { opacity: 0; transform: scale(.5); }
-  25% { opacity: .95; transform: scale(1.1); }
-  70% { opacity: .8; transform: scale(1); }
-  100% { opacity: 0; }
-}
-.cz-hint {
-  font-size: 12.5px; color: var(--text-dim); min-height: 20px;
-  text-align: center; word-break: keep-all;
-}
+.pt-fb.good { color: var(--good); }
+.pt-fb.bad { color: var(--bad); }
 
 /* ---------- 좁은 화면 ---------- */
 @media (max-height: 780px) {
