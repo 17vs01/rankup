@@ -215,6 +215,8 @@ export function loadState() {
   if (!s.theme) s.theme = 'onyx';
   if (!s.seenRules) s.seenRules = {};
   if (!s.modes) s.modes = {};
+  // 함정 퀴즈가 가족별로 몇 번 냈는지 (덜 본 문제부터 내려고)
+  if (!s.trapSeen || typeof s.trapSeen !== 'object') s.trapSeen = {};
   s.totalSessions = num(s.totalSessions, 0);
   s.streak = num(s.streak, 0);
   s.freeze = Math.max(0, Math.min(2, num(s.freeze, 0)));

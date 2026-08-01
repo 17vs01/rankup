@@ -578,6 +578,209 @@ function genCoin() {
   };
 }
 
+// ===== 포함과 배제 =====
+function genVenn() {
+  const T = ri(6, 12) * 5;
+  const both = ri(4, 12);
+  const a = both + ri(3, 15), b = both + ri(3, 15);
+  const neither = T - (a + b - both);
+  if (neither < 2 || a > T || b > T) return genVenn();
+  const S = pick([['축구', '농구'], ['커피', '차'], ['영화', '독서']]);
+  if (Math.random() < 0.35) {
+    return {
+      q: `${T}명 중 ${S[0]}을(를) 좋아하는 사람이 ${a}명, ${S[1]}을(를) 좋아하는 사람이 ${b}명, <b>둘 다</b> 좋아하는 사람이 ${both}명입니다. ${S[0]}<b>만</b> 좋아하는 사람은 몇 명일까요?`,
+      ans: a - both, trap: a, alts: [b - both, a + both, T - a], unit: '명',
+      why: `${S[0]}을(를) 좋아하는 ${a}명 안에는 <b>둘 다 좋아하는 ${both}명이 이미 포함</b>돼 있습니다. ${S[0]}만 좋아하는 사람은 ${a} − ${both} = ${a - both}명입니다.`,
+    };
+  }
+  return {
+    q: `${T}명 중 ${S[0]}을(를) 좋아하는 사람이 ${a}명, ${S[1]}을(를) 좋아하는 사람이 ${b}명, 둘 다 좋아하는 사람이 ${both}명입니다. <b>둘 다 좋아하지 않는</b> 사람은 몇 명일까요?`,
+    ans: neither, trap: T - a - b > 0 ? T - a - b : T - a - b + both * 2,
+    alts: [both, a + b - both, T - both], unit: '명',
+    why: `${a} + ${b} = ${a + b}명으로 세면 둘 다 좋아하는 ${both}명을 <b>두 번</b> 센 것입니다. 한 번 빼면 ${a} + ${b} − ${both} = ${a + b - both}명이 적어도 하나를 좋아합니다. 전체에서 빼면 ${T} − ${a + b - both} = ${neither}명입니다.`,
+  };
+}
+
+// ===== 하노이 탑 =====
+function genHanoi() {
+  const n = ri(3, 8);
+  return {
+    q: `원반 ${n}개짜리 하노이 탑을 옮기려면 <b>최소</b> 몇 번 움직여야 할까요? (한 번에 한 개씩, 큰 원반을 작은 원반 위에 올릴 수 없습니다)`,
+    ans: 2 ** n - 1, trap: 2 ** n, alts: [n * n, 2 * n, 2 ** (n - 1)], unit: '번',
+    why: `원반 하나가 늘 때마다 횟수가 두 배보다 하나 더 늘어납니다. n개면 2ⁿ − 1번이고, ${n}개는 2^${n} − 1 = ${2 ** n - 1}번입니다. (위 ${n - 1}개를 옮기고 → 제일 큰 것 1번 → 다시 ${n - 1}개를 옮기니 2×${2 ** (n - 1) - 1}+1)`,
+  };
+}
+
+// ===== 비례의 연쇄 (저울) =====
+function genBalance() {
+  const a = ri(2, 4), b = ri(2, 5), c = ri(2, 4), d = ri(2, 5);
+  const n = a * c * ri(1, 3);
+  const ans = n * b * d / (a * c);
+  if (!Number.isInteger(ans) || ans > 200) return genBalance();
+  const F = pick([['사과', '배', '귤'], ['빨간 구슬', '파란 구슬', '노란 구슬'], ['금화', '은화', '동전']]);
+  return {
+    q: `저울에서 ${F[0]} ${a}개와 ${F[1]} ${b}개의 무게가 같고, ${F[1]} ${c}개와 ${F[2]} ${d}개의 무게가 같습니다. ${F[0]} ${n}개는 ${F[2]} 몇 개와 무게가 같을까요?`,
+    // 가장 흔한 실수는 한 단계만 바꾸고 멈추는 것
+    ans, trap: n * b / a,
+    alts: [n * d / c, ans + n, n * (b + d)].filter(Number.isInteger), unit: '개',
+    why: `두 번 바꿔야 합니다. ${F[0]} ${n}개 = ${F[1]} ${n * b / a}개(${a}개당 ${b}개 비율), 그리고 ${F[1]} ${n * b / a}개 = ${F[2]} ${ans}개(${c}개당 ${d}개 비율)입니다. 비율은 <b>곱해서</b> 이어붙여야지 더하면 안 됩니다.`,
+  };
+}
+
+// ===== 일의 자리 (주기) =====
+function genLastDigit() {
+  const base = pick([2, 3, 7, 8, 12, 13, 17]);
+  const e = pick([50, 100, 2026, 99, 77, 123]);
+  const last = base % 10;
+  const cyc = [];
+  let x = 1;
+  for (let i = 0; i < 4; i++) { x = (x * last) % 10; cyc.push(x); }
+  const ans = cyc[(e - 1) % 4];
+  return {
+    q: `${base}<sup>${e}</sup>의 <b>일의 자리</b> 숫자는 무엇일까요?`,
+    ans, trap: last, alts: cyc.filter(v => v !== ans && v !== last).concat([e % 10]), unit: '',
+    why: `일의 자리는 ${last}, ${cyc[1]}, ${cyc[2]}, ${cyc[3]} 네 개가 <b>계속 반복</b>됩니다(주기 4). ${e}를 4로 나눈 나머지가 ${e % 4 === 0 ? '0이므로 네 번째' : `${e % 4}이므로 ${e % 4}번째`}인 ${ans}입니다. 큰 지수라도 직접 계산할 필요가 없습니다.`,
+  };
+}
+
+// ===== 금괴 자르기 (이진 분할) =====
+function genGold() {
+  const k = ri(2, 5);
+  const n = 2 ** k - 1;
+  return {
+    q: `금괴 하나로 ${n}일 동안 일당을 줍니다. 매일 ${n}분의 1씩 <b>정확히</b> 지급해야 하고, 이미 준 조각을 <b>거슬러 받아도</b> 됩니다. 금괴를 최소 몇 번 잘라야 할까요?`,
+    ans: k - 1, trap: n - 1, alts: [k, n, Math.round(n / 2)], unit: '번',
+    why: `${k - 1}번 자르면 조각이 ${k}개 생깁니다 — 크기를 1 : 2${k >= 3 ? ' : 4' : ''}${k >= 4 ? ' : 8' : ''}${k >= 5 ? ' : 16' : ''}로 나누면 되죠. 2일째엔 2짜리를 주고 1짜리를 <b>거슬러 받고</b>, 3일째엔 1짜리를 다시 주는 식으로 1부터 ${n}까지 모든 수를 만들 수 있습니다. 매일 한 조각씩 주려고 ${n - 1}번 자를 필요가 없습니다.`,
+  };
+}
+
+// ===== 순서 추론 (연역) =====
+const ORDER_ITEMS = [['가 상자', '나 상자', '다 상자', '라 상자'], ['민수', '지연', '태호', '수빈']];
+function genOrder() {
+  const names = pick(ORDER_ITEMS);
+  const order = shuffle(names.slice());   // order[0]이 가장 가볍다
+  const heavy = pick([true, false]);
+  const lines = [];
+  for (let i = 0; i < order.length - 1; i++) {
+    // 무겁다/가볍다를 섞어서 방향을 통일해 읽지 못하게 한다
+    lines.push(Math.random() < 0.5
+      ? `${order[i + 1]}은(는) ${order[i]}보다 무겁습니다`
+      : `${order[i]}은(는) ${order[i + 1]}보다 가볍습니다`);
+  }
+  const ask = pick(names);
+  const idx = order.indexOf(ask);
+  const ans = heavy ? order.length - idx : idx + 1;
+  return {
+    q: `${shuffle(lines).join('. ')}. <b>${heavy ? '가장 무거운' : '가장 가벼운'} 것부터</b> 순서를 매길 때 ${ask}은(는) 몇 번째일까요?`,
+    ans, trap: order.length + 1 - ans, alts: [ans === 1 ? 3 : 1, order.length, 2].filter(v => v !== ans),
+    unit: '번째',
+    why: `문장을 한 줄로 이어보면 가벼운 것부터 ${order.join(' < ')} 입니다. ${heavy ? '무거운' : '가벼운'} 것부터 세면 ${ask}은(는) ${ans}번째입니다. 문장마다 "무겁다"와 "가볍다"가 섞여 있어서 방향을 한 번 통일하고 세야 합니다.`,
+  };
+}
+
+// ===== 다리 건너기 (최적화) =====
+function genBridge() {
+  const a = ri(1, 2), b = a + ri(1, 3), c = b + ri(1, 4), d = c + ri(2, 8);
+  const greedy = 2 * a + b + c + d;      // 가장 빠른 사람이 매번 안내
+  const smart = a + 3 * b + d;           // 느린 둘을 한 번에 보낸다
+  const ans = Math.min(greedy, smart);
+  if (greedy === smart) return genBridge();
+  return {
+    q: `네 사람이 밤에 다리를 건넙니다. 각각 ${a}분·${b}분·${c}분·${d}분이 걸리고, 다리는 <b>한 번에 두 명</b>까지, 반드시 <b>손전등</b>을 들어야 건널 수 있습니다. 손전등은 하나뿐이라 누군가 다시 가져와야 합니다. 네 명이 모두 건너는 <b>최소</b> 시간은?`,
+    ans, trap: Math.max(greedy, smart), alts: [a + b + c + d, d + c, 2 * d], unit: '분',
+    why: ans === smart
+      ? `가장 빠른 사람(${a}분)이 매번 안내하면 ${greedy}분이 걸립니다. 더 좋은 방법은 <b>느린 두 사람을 한 번에</b> 보내는 것입니다: ${a}·${b} 건넘(${b}) → ${a} 복귀(${a}) → ${c}·${d} 건넘(${d}) → ${b} 복귀(${b}) → ${a}·${b} 건넘(${b}) = ${smart}분. 느린 사람 둘이 같이 가면 그중 한 번만 손해입니다.`
+      : `이번에는 가장 빠른 사람(${a}분)이 매번 안내하는 쪽이 낫습니다: ${greedy}분. 느린 둘을 묶어 보내는 방법은 ${smart}분이 걸립니다. 두 전략을 <b>모두 계산해 보고</b> 작은 쪽을 골라야 합니다.`,
+  };
+}
+
+// ===== 전구 토글 (불변량) =====
+function genBulbs() {
+  const n = pick([50, 100, 144, 200, 400]);
+  const ans = Math.floor(Math.sqrt(n));
+  return {
+    q: `전구 ${n}개가 모두 꺼져 있습니다. 1번 사람이 <b>모든</b> 전구의 스위치를 누르고, 2번 사람이 2의 배수 번호, 3번 사람이 3의 배수 번호… ${n}번 사람까지 누릅니다. 마지막에 <b>켜져 있는</b> 전구는 몇 개일까요?`,
+    ans, trap: n / 2, alts: [n, Math.round(n / 4), ans * 2], unit: '개',
+    why: `${n}번 전구는 ${n}의 약수 개수만큼 눌립니다. 홀수 번 눌려야 켜진 채로 남는데, 약수는 보통 짝을 지어 나오므로(1×12, 2×6, 3×4) 짝수 개입니다. <b>완전제곱수</b>만 예외입니다 — 36 = 6×6처럼 짝이 자기 자신이라 약수가 홀수 개죠. 1부터 ${n}까지 완전제곱수는 ${ans}개(1², 2², …, ${ans}²)입니다.`,
+  };
+}
+
+// ===== 나머지 추론 =====
+function genRemainder() {
+  const gcd = (x, y) => y ? gcd(y, x % y) : x;
+  const a = pick([3, 4, 5]), b = pick([5, 6, 7]);
+  // 서로소여야 답이 a×b 구간에 정확히 하나만 있다 (아니면 문제가 애매해진다)
+  if (a === b || gcd(a, b) !== 1) return genRemainder();
+  const r1 = ri(1, a - 1), r2 = ri(1, b - 1);
+  const lo = ri(3, 8) * 10;
+  let ans = null;
+  for (let x = lo; x < lo + a * b; x++) {
+    if (x % a === r1 && x % b === r2) { ans = x; break; }
+  }
+  if (ans === null || ans > lo + a * b) return genRemainder();
+  return {
+    q: `달걀을 ${a}개씩 담으면 ${r1}개가 남고, ${b}개씩 담으면 ${r2}개가 남습니다. 달걀이 ${lo}개 이상 ${lo + a * b - 1}개 이하일 때 달걀은 몇 개일까요?`,
+    ans, trap: lo + r1 + r2, alts: [ans + a, ans - b, a * b + r1], unit: '개',
+    why: `${a}로 나눈 나머지가 ${r1}, ${b}로 나눈 나머지가 ${r2}인 수를 찾습니다. 두 조건을 <b>동시에</b> 만족하는 수는 ${a * b}개마다 한 번씩 나오므로, ${lo}~${lo + a * b - 1} 사이에는 정확히 하나 — ${ans}개입니다. (${ans} ÷ ${a} = ${Math.floor(ans / a)}…${r1}, ${ans} ÷ ${b} = ${Math.floor(ans / b)}…${r2})`,
+  };
+}
+
+// ===== 몬티 홀 =====
+function genMonty() {
+  const n = pick([4, 5, 10, 20, 50, 100]);
+  const ans = Math.round((n - 1) / n * 100);
+  return {
+    q: `문 ${n}개 중 하나에만 상품이 있습니다. 당신이 문 하나를 고르자, <b>정답을 아는</b> 진행자가 나머지 문 중 빈 문 ${n - 2}개를 열어 보여줍니다. 이제 남은 문으로 <b>바꾸면</b> 상품을 얻을 확률은 몇 %일까요?`,
+    ans, trap: 50, alts: [Math.round(100 / n), 100, ans - 10].filter(v => v > 0 && v !== ans),
+    unit: '%',
+    why: `처음 고른 문이 정답일 확률은 여전히 ${Math.round(100 / n)}%입니다 — 진행자가 문을 열어도 그 사실은 바뀌지 않습니다. 나머지 ${n - 1}개에 정답이 있을 확률 ${ans}%가 <b>남은 한 문에 그대로 몰립니다</b>. 진행자는 정답을 알고 빈 문만 골라 열었기 때문입니다. 문이 둘 남았다고 반반이 아닙니다.`,
+  };
+}
+
+// ===== 물병 붓기 (탐색) =====
+function genJug() {
+  const gcd = (x, y) => y ? gcd(y, x % y) : x;
+  const a = pick([3, 4, 5]), b = pick([5, 7, 8, 9]);
+  if (a >= b || gcd(a, b) !== 1) return genJug();
+  const target = ri(1, b - 1);
+  // 최소 조작 횟수를 너비 우선 탐색으로 구한다 (채우기·비우기·옮기기 = 각 1번)
+  const seen = new Set(['0,0']);
+  let frontier = [[0, 0]], steps = 0, found = -1;
+  while (frontier.length && steps < 20 && found < 0) {
+    steps++;
+    const nextF = [];
+    for (const [x, y] of frontier) {
+      const move = Math.min(x, b - y), move2 = Math.min(y, a - x);
+      for (const s of [[a, y], [x, b], [0, y], [x, 0], [x - move, y + move], [x + move2, y - move2]]) {
+        const k = s.join(',');
+        if (seen.has(k)) continue;
+        seen.add(k);
+        if (s[0] === target || s[1] === target) { found = steps; break; }
+        nextF.push(s);
+      }
+      if (found > 0) break;
+    }
+    frontier = nextF;
+  }
+  if (found < 2) return genJug();
+  return {
+    q: `눈금 없는 ${a}L 물병과 ${b}L 물병만 있습니다. 물은 얼마든지 쓸 수 있고 <b>채우기·비우기·옮기기</b>가 각각 한 번의 조작입니다. 정확히 ${target}L를 만들려면 최소 몇 번의 조작이 필요할까요?`,
+    ans: found, trap: found + 2, alts: [found - 1, a + b, target * 2].filter(v => v > 0 && v !== found),
+    unit: '번',
+    why: `물병에 눈금이 없어도 두 병을 오가며 <b>차이</b>를 만들면 됩니다. ${a}L와 ${b}L는 서로 나누어떨어지지 않아서 1L 단위까지 모두 만들 수 있고, ${target}L는 최소 ${found}번이면 됩니다. 무작정 붓기 전에 "몇 번 만에 되는가"를 세어 보면 훨씬 짧은 길이 보입니다.`,
+  };
+}
+
+// ===== 기사와 거짓말쟁이 =====
+function genKnights() {
+  const n = ri(2, 5) * 2;   // 짝수라야 답이 딱 떨어진다
+  return {
+    q: `${n}명이 한 명씩 말했습니다. 1번은 "우리 중 거짓말쟁이가 <b>1명 이상</b>이다", 2번은 "2명 이상이다", … ${n}번은 "${n}명 이상이다"라고 했습니다. 정직한 사람은 <b>항상 참</b>만, 거짓말쟁이는 <b>항상 거짓</b>만 말합니다. 정직한 사람은 몇 명일까요?`,
+    ans: n / 2, trap: 1, alts: [n - 1, n / 2 + 1, 0].filter(v => v > 0 && v !== n / 2), unit: '명',
+    why: `거짓말쟁이가 L명이라 하면 "L명 이상이다"까지는 참이고 그 뒤는 거짓입니다. 정직한 사람은 참을 말했으니 앞쪽 L명 안에 있고, 거짓말쟁이는 거짓을 말했으니 <b>뒤쪽 ${n} − L명이 전부 거짓말쟁이</b>여야 합니다. 즉 L = ${n} − L이므로 L = ${n / 2}, 정직한 사람도 ${n / 2}명입니다.`,
+  };
+}
+
 // [가족, 필요 레벨]. 레벨 = (레이팅-1000)/200
 // 랭크가 오를수록 새 가족이 열려서, 익숙해질 때쯤 처음 보는 문제가 나온다.
 const FAMILIES = [
@@ -605,6 +808,19 @@ const FAMILIES = [
   ['mix', 4, genMix],
   ['ratio', 4, genRatio],
   ['coin', 4, genCoin],
+  // --- 여기서부터는 "계산"이 아니라 다른 종류의 생각을 요구한다 ---
+  ['venn', 1, genVenn],            // 포함과 배제
+  ['hanoi', 2, genHanoi],          // 재귀
+  ['balance', 3, genBalance],      // 비례의 연쇄
+  ['lastdigit', 3, genLastDigit],  // 주기
+  ['gold', 4, genGold],            // 이진 분할 (최적화)
+  ['order', 4, genOrder],          // 연역 추론
+  ['bridge', 5, genBridge],        // 최적화 — 욕심쟁이 전략이 최선이 아니다
+  ['bulbs', 5, genBulbs],          // 불변량 (약수의 홀짝)
+  ['remainder', 5, genRemainder],  // 나머지
+  ['monty', 5, genMonty],          // 조건부 확률
+  ['jug', 6, genJug],              // 상태 탐색
+  ['knights', 6, genKnights],      // 자기참조 논리
 ];
 
 // 보기 4개 = 정답 + 함정 + 그 가족이 지정한 오답들.
@@ -638,6 +854,8 @@ export const trapGame = {
     let round = 0, correct = 0, trapped = 0;
     let cur = null, locked = false;
     const used = new Set();   // 한 판에 같은 가족은 한 번만
+    // 가족별로 지금까지 몇 번 만났는지 (판을 넘어 이어진다)
+    const seen = ctx.state.trapSeen || (ctx.state.trapSeen = {});
     const elapsed = ctx.stopwatch();
 
     ctx.body.innerHTML = `
@@ -656,10 +874,16 @@ export const trapGame = {
     function next() {
       round++;
       if (round > ROUNDS) return end();
-      // 이번 판에 안 나온 가족 중에서 뽑는다
+      // 이번 판에 안 나온 가족 중에서, 그중에서도 지금까지 가장 적게 본 것부터 뽑는다.
+      // 이러면 모든 가족을 한 바퀴 돈 뒤에야 같은 가족이 다시 나온다 —
+      // "또 그 문제네" 하는 순간이 최대한 뒤로 밀린다.
       const cands = pool.filter(([fam]) => !used.has(fam));
-      const [fam, , gen] = pick(cands.length ? cands : pool);
+      const from = cands.length ? cands : pool;
+      const least = Math.min(...from.map(([fam]) => seen[fam] || 0));
+      const [fam, , gen] = pick(from.filter(([f]) => (seen[f] || 0) === least));
       used.add(fam);
+      seen[fam] = (seen[fam] || 0) + 1;
+      ctx.persist();
       cur = gen();
       locked = false;
       $round.innerHTML = `${round} / ${ROUNDS}문제 · 정답 <b>${correct}</b>`;
