@@ -353,7 +353,233 @@ function genScale() {
   };
 }
 
+// ===== 배율과 차원 =====
+// 변 2배면 넓이는 4배, 부피는 8배. 차원을 잊으면 그냥 2배라고 답한다.
+function genArea() {
+  const k = ri(2, 4);
+  const v = pick(['square', 'cube', 'circle', 'reverse']);
+  if (v === 'cube') {
+    return {
+      q: `정육면체의 모서리 길이를 ${k}배로 늘리면 <b>부피</b>는 몇 배가 될까요?`,
+      ans: k ** 3, trap: k, alts: [k * k, k * 3, k ** 3 + k], unit: '배',
+      why: `부피는 가로×세로×높이라 세 방향이 모두 ${k}배가 됩니다. ${k}×${k}×${k} = ${k ** 3}배. 길이가 ${k}배일 때 넓이는 ${k * k}배(2차원), 부피는 ${k ** 3}배(3차원)입니다.`,
+    };
+  }
+  if (v === 'circle') {
+    return {
+      q: `원의 반지름을 ${k}배로 늘리면 <b>넓이</b>는 몇 배가 될까요?`,
+      ans: k * k, trap: k, alts: [k ** 3, k * 2, k * k + 1], unit: '배',
+      why: `넓이는 반지름의 제곱에 비례합니다(πr²). 반지름이 ${k}배면 넓이는 ${k}² = ${k * k}배. 지름이 절반인 피자가 4분의 1 크기인 것과 같은 이치입니다.`,
+    };
+  }
+  if (v === 'reverse') {
+    return {
+      q: `정사각형의 <b>넓이를 ${k * k}배</b>로 만들려면 한 변을 몇 배로 늘려야 할까요?`,
+      ans: k, trap: k * k, alts: [k * k / 2, k + 1, k * k * 2].filter(Number.isInteger), unit: '배',
+      why: `넓이는 변의 제곱이므로 거꾸로 제곱근을 취합니다. 넓이 ${k * k}배 → 변은 √${k * k} = ${k}배. 변을 ${k * k}배로 늘리면 넓이는 ${k * k * k * k}배가 되어 너무 큽니다.`,
+    };
+  }
+  return {
+    q: `정사각형의 한 변을 ${k}배로 늘리면 <b>넓이</b>는 몇 배가 될까요?`,
+    ans: k * k, trap: k, alts: [k ** 3, k * 2, k * k + k], unit: '배',
+    why: `가로도 ${k}배, 세로도 ${k}배가 되므로 넓이는 ${k}×${k} = ${k * k}배입니다. 길이가 ${k}배라고 넓이도 ${k}배가 되는 게 아닙니다 — 차원이 하나 더 있습니다.`,
+  };
+}
+
+// ===== 함께 하는 일 =====
+// 6시간 걸리는 사람과 3시간 걸리는 사람이 함께 하면 4.5시간이 아니라 2시간이다.
+const WORK_PAIRS = [[6, 3, 2], [12, 4, 3], [20, 5, 4], [6, 12, 4], [30, 20, 12],
+  [10, 15, 6], [8, 24, 6], [9, 18, 6], [21, 28, 12], [12, 6, 4]];
+const WORK_WHO = [
+  { a: '수도관 A', b: '수도관 B', what: '물통을 채우는', unit: '시간' },
+  { a: '형', b: '동생', what: '방을 청소하는', unit: '분' },
+  { a: '기계 A', b: '기계 B', what: '작업을 끝내는', unit: '시간' },
+];
+function genWork() {
+  const [a, b, t] = pick(WORK_PAIRS);
+  const w = pick(WORK_WHO);
+  return {
+    q: `${w.a}는 혼자서 ${a}${w.unit}, ${w.b}는 혼자서 ${b}${w.unit}이면 ${w.what} 일을 끝냅니다. 둘이 <b>함께</b> 하면 몇 ${w.unit}이 걸릴까요?`,
+    ans: t, trap: Math.round((a + b) / 2), alts: [Math.min(a, b), a + b, Math.abs(a - b)], unit: w.unit,
+    why: `시간을 평균 내면 안 됩니다 — 더해야 하는 건 시간이 아니라 "1${w.unit}당 하는 양"입니다. ${w.a}는 1${w.unit}에 ${a}분의 1, ${w.b}는 ${b}분의 1을 하니 함께라면 ${a}분의 1 + ${b}분의 1 = ${a * b / (a + b) === t ? `${a + b}/${a * b}` : ''}. 전체를 이 속도로 나누면 ${t}${w.unit}입니다. 혼자 빠른 쪽(${Math.min(a, b)}${w.unit})보다 반드시 빨라야 한다는 점도 확인해 보세요.`,
+  };
+}
+
+// ===== 겹치는 할인 =====
+const DISCOUNT_PAIRS = [[20, 20, 36], [30, 20, 44], [50, 20, 60], [10, 10, 19],
+  [40, 50, 70], [25, 20, 40], [30, 30, 51], [50, 40, 70], [20, 10, 28]];
+function genDiscount() {
+  // 변형: 할인 겹치기 / 할인 후 같은 비율 인상(원래로 안 돌아온다)
+  if (Math.random() < 0.4) {
+    // r²/100이 정수여야 답이 소수가 되지 않는다 (25%는 93.75%가 나온다)
+    const r = pick([10, 20, 30, 40, 50]);
+    const back = 100 - r * r / 100;
+    return {
+      q: `어떤 상품을 ${r}% 할인했다가, 나중에 할인된 가격에서 다시 ${r}% <b>인상</b>했습니다. 지금 가격은 원래 가격의 몇 %일까요?`,
+      ans: back, trap: 100, alts: [100 - r, 100 + r, back - r], unit: '%',
+      plain: true,
+      why: `원래 가격을 100이라 하면 ${r}% 할인 후 ${100 - r}, 여기서 ${r}% 인상하면 ${100 - r} × ${(100 + r) / 100} = ${back}입니다. 같은 비율이라도 <b>기준이 달라서</b> 원래로 돌아오지 않습니다 — 할인은 100 기준, 인상은 ${100 - r} 기준이니까요.`,
+    };
+  }
+  const [a, b, ans] = pick(DISCOUNT_PAIRS);
+  return {
+    q: `정가에서 ${a}% 할인한 뒤, 계산할 때 거기서 다시 ${b}%를 더 할인해 줍니다. 정가 대비 총 몇 % 할인일까요?`,
+    ans, trap: a + b, alts: [100 - ans, Math.round((a + b) / 2), a + b - 5], unit: '%',
+    why: `${a}% + ${b}% = ${a + b}%가 아닙니다. 두 번째 할인은 <b>이미 깎인 가격</b>에서 적용되기 때문입니다. 정가를 100이라 하면 ${100 - a} → ${100 - a} × ${(100 - b) / 100} = ${100 - ans}. 즉 ${ans}% 할인입니다.`,
+  };
+}
+
+// ===== 평균 끌어올리기 =====
+function genAverage() {
+  const n = ri(3, 8);
+  const a = ri(6, 9) * 10;
+  const up = ri(1, 4);
+  const ans = (n + 1) * (a + up) - n * a;
+  return {
+    q: `지금까지 ${n}과목 시험의 평균이 ${a}점입니다. 한 과목을 더 봐서 <b>전체 평균</b>을 ${a + up}점으로 올리려면 그 과목에서 몇 점을 받아야 할까요?`,
+    ans, trap: a + up, alts: [a + up * 2, a, ans + up], unit: '점',
+    why: `${a + up}점을 받으면 평균은 ${a + up}점이 아니라 그보다 낮아집니다 — 앞의 ${n}과목이 평균을 끌어내리니까요. 전체 ${n + 1}과목 합계가 ${n + 1} × ${a + up} = ${(n + 1) * (a + up)}점이어야 하는데 지금까지 ${n} × ${a} = ${n * a}점이므로, 차이인 ${ans}점이 필요합니다.`,
+  };
+}
+
+// ===== 나이 =====
+function genAge() {
+  const s = ri(6, 14);
+  const y = ri(3, 8);
+  const m = ri(2, 3);
+  const d = (m - 1) * (s + y);
+  return {
+    q: `아버지는 아들보다 ${d}살 많습니다. ${y}년 뒤에 아버지 나이가 아들 나이의 <b>정확히 ${m}배</b>가 된다면, 지금 아들은 몇 살일까요?`,
+    ans: s, trap: s + y, alts: [Math.round(d / m), s + d, d - y], unit: '살',
+    why: `"지금" ${m}배라고 풀면 ${d} ÷ ${m - 1} = ${s + y}살이 나오지만, 문제는 <b>${y}년 뒤</b>입니다. ${y}년 뒤 아들을 x라 하면 아버지는 x+${d}, 조건은 x+${d} = ${m}x → ${d} = ${m - 1}x → x = ${s + y}살. 그건 ${y}년 뒤 나이이므로 지금은 ${s + y} − ${y} = ${s}살입니다.`,
+  };
+}
+
+// ===== 기차가 다리를 건넌다 =====
+const TRAIN_SPEEDS = [[36, 10], [54, 15], [72, 20], [90, 25], [108, 30]];
+function genTrain() {
+  const [kmh, ms] = pick(TRAIN_SPEEDS);
+  // 길이를 초속의 배수로 잡으면 답이 항상 정수로 떨어진다
+  const len = ms * ri(6, 14);
+  const b = ms * ri(8, 25);
+  const total = len + b;
+  const ans = total / ms;
+  return {
+    q: `길이 ${len}m인 기차가 시속 ${kmh}km로 달려 길이 ${b}m인 다리를 <b>완전히</b> 건넙니다. 몇 초가 걸릴까요?`,
+    ans, trap: b / ms, alts: [len / ms, Math.round((b - len) / ms), ans + len / ms],
+    unit: '초',
+    why: `기차 <b>끝</b>이 다리를 벗어나야 "완전히" 건넌 것입니다. 그래서 달려야 할 거리는 다리 길이 ${b}m가 아니라 다리 + 기차 = ${b} + ${len} = ${total}m입니다. 시속 ${kmh}km는 초속 ${ms}m이므로 ${total} ÷ ${ms} = ${ans}초. 다리 길이만 쓰면 ${b / ms}초가 나옵니다.`,
+  };
+}
+
+// ===== 층수와 계단 =====
+function genStair() {
+  const a = ri(3, 5);
+  const b = ri(a + 2, 11);
+  const per = ri(2, 8) * 5;
+  const t = per * (a - 1);
+  return {
+    q: `1층에서 ${a}층까지 걸어 올라가는 데 ${t}초가 걸립니다. 같은 속도라면 1층에서 <b>${b}층</b>까지는 몇 초가 걸릴까요?`,
+    ans: per * (b - 1), trap: Math.round(t / a * b),
+    alts: [per * b, t * 2, Math.round(t * b / a) + per], unit: '초',
+    why: `층수가 아니라 <b>층과 층 사이</b>를 세야 합니다. 1층→${a}층은 계단 ${a - 1}구간이라 한 구간에 ${t} ÷ ${a - 1} = ${per}초. 1층→${b}층은 ${b - 1}구간이므로 ${per} × ${b - 1} = ${per * (b - 1)}초입니다. 층수로 비례식(${Math.round(t / a * b)}초)을 세우면 틀립니다.`,
+  };
+}
+
+// ===== 색칠한 큐브 =====
+function genCube() {
+  const n = ri(3, 6);
+  const v = pick(['none', 'one', 'two']);
+  if (v === 'one') {
+    return {
+      q: `${n}×${n}×${n} 정육면체의 겉면 전체를 칠한 뒤 1×1×1 조각으로 자릅니다. <b>정확히 한 면</b>만 칠해진 조각은 몇 개일까요?`,
+      ans: 6 * (n - 2) ** 2, trap: 6 * n * n, alts: [(n - 2) ** 3, 12 * (n - 2), 6 * (n - 2)], unit: '개',
+      why: `한 면만 칠해진 조각은 각 면의 <b>테두리를 뺀 안쪽</b>에 있습니다. 한 면에 ${n - 2}×${n - 2} = ${(n - 2) ** 2}개, 면이 6개이므로 ${6 * (n - 2) ** 2}개입니다. 테두리 조각은 두 면 이상 칠해져 있습니다.`,
+    };
+  }
+  if (v === 'two') {
+    return {
+      q: `${n}×${n}×${n} 정육면체의 겉면 전체를 칠한 뒤 1×1×1 조각으로 자릅니다. <b>정확히 두 면</b>이 칠해진 조각은 몇 개일까요?`,
+      ans: 12 * (n - 2), trap: 12, alts: [6 * (n - 2) ** 2, 8, (n - 2) ** 3], unit: '개',
+      why: `두 면이 칠해진 조각은 <b>모서리</b>에 있되 꼭짓점은 아닌 것들입니다. 정육면체의 모서리는 12개이고 각 모서리마다 꼭짓점 2개를 뺀 ${n - 2}개가 있으므로 12 × ${n - 2} = ${12 * (n - 2)}개. 꼭짓점 8개는 세 면이 칠해져 있습니다.`,
+    };
+  }
+  return {
+    q: `${n}×${n}×${n} 정육면체의 겉면 전체를 칠한 뒤 1×1×1 조각으로 자릅니다. <b>어느 면에도 색이 없는</b> 조각은 몇 개일까요?`,
+    ans: (n - 2) ** 3, trap: (n - 1) ** 3, alts: [n ** 3 - 6 * n * n, 1, 12 * (n - 2)].filter(v => v > 0), unit: '개',
+    why: `색이 안 묻은 조각은 겉껍질을 <b>여섯 방향 모두</b> 벗겨낸 안쪽 덩어리입니다. 각 방향에서 한 겹씩 빠지므로 한 변이 ${n} − 2 = ${n - 2}, 즉 ${n - 2}³ = ${(n - 2) ** 3}개입니다. 한 겹만 벗기면 ${(n - 1) ** 3}개가 나와 틀립니다.`,
+  };
+}
+
+// ===== 시계 각도 =====
+function genAngle() {
+  const h = ri(1, 12);
+  const m = pick([10, 20, 30, 40, 50]);
+  let a = Math.abs(30 * h - 5.5 * m);
+  if (a > 180) a = 360 - a;
+  let naive = Math.abs(30 * h - 6 * m);
+  if (naive > 180) naive = 360 - naive;
+  if (a === naive || !Number.isInteger(a)) return genAngle();
+  return {
+    q: `${h}시 ${m}분에 시계의 <b>시침과 분침</b>이 이루는 작은 쪽 각도는 몇 도일까요?`,
+    ans: a, trap: naive, alts: [Math.abs(a - 15), a + 15, 180 - a].filter(v => v > 0 && v !== a),
+    unit: '도',
+    why: `분침만 움직인다고 보면 ${naive}도가 나오지만, <b>시침도 같이 움직입니다</b>. 시침은 1분에 0.5도씩 가므로 ${h}시 ${m}분의 시침은 ${(30 * h) % 360}도가 아니라 ${(30 * h + 0.5 * m) % 360}도에 있습니다. 분침은 ${6 * m}도이므로 차이는 ${a}도입니다.`,
+  };
+}
+
+// ===== 소금물 섞기 =====
+const MIX_SETS = [[10, 200, 20, 300, 16], [6, 300, 16, 200, 10], [5, 400, 15, 100, 7],
+  [12, 100, 20, 300, 18], [4, 300, 24, 200, 12], [8, 500, 18, 500, 13], [3, 200, 13, 300, 9]];
+function genMix() {
+  const [c1, g1, c2, g2, ans] = pick(MIX_SETS);
+  const avg = (c1 + c2) / 2;
+  return {
+    q: `${c1}% 소금물 ${g1}g과 ${c2}% 소금물 ${g2}g을 <b>섞으면</b> 몇 %가 될까요?`,
+    ans, trap: avg, alts: [c1 + c2, Math.abs(c2 - c1), ans + 2], unit: '%',
+    why: `양이 다르므로 농도를 단순 평균(${avg}%) 내면 안 됩니다. 소금의 양을 세세요 — ${g1 * c1 / 100}g + ${g2 * c2 / 100}g = ${g1 * c1 / 100 + g2 * c2 / 100}g이고 전체는 ${g1 + g2}g이므로 ${ans}%입니다. 양이 많은 ${g1 > g2 ? `${c1}%` : `${c2}%`} 쪽으로 끌립니다.`,
+  };
+}
+
+// ===== 역비율 =====
+const RATIO_SETS = [[25, 20], [100, 50], [150, 60], [300, 75], [400, 80], [900, 90], [50, 33.33]];
+function genRatio() {
+  const [more, less] = pick(RATIO_SETS.filter(([, l]) => Number.isInteger(l)));
+  return {
+    q: `A는 B보다 ${more}% <b>많습니다</b>. 그렇다면 B는 A보다 몇 % <b>적을까요</b>?`,
+    ans: less, trap: more, alts: [100 - more, more - less, less + 10].filter(v => v > 0 && v !== less),
+    unit: '%',
+    why: `기준이 다릅니다. B를 100이라 하면 A는 ${100 + more}입니다. B가 A보다 얼마나 적은지는 <b>A를 기준</b>으로 재야 하므로 ${more} ÷ ${100 + more} = ${less}%입니다. "${more}% 많다"와 "${more}% 적다"는 같은 말이 아닙니다.`,
+  };
+}
+
+// ===== 확률의 분모 =====
+function genCoin() {
+  const v = pick(['coin', 'dice', 'twoheads']);
+  if (v === 'dice') {
+    return {
+      q: `주사위 두 개를 던졌을 때 <b>눈의 합이 7</b>일 확률은 몇 분의 1일까요?`,
+      ans: 6, trap: 11, alts: [36, 12, 7], unit: '분의 1',
+      why: `합이 나올 수 있는 경우는 2부터 12까지 11가지지만 <b>가능성이 서로 다릅니다</b>. 전체 경우는 6×6 = 36가지이고 합이 7인 경우는 (1,6)(2,5)(3,4)(4,3)(5,2)(6,1) 6가지이므로 6/36 = 6분의 1입니다.`,
+    };
+  }
+  if (v === 'twoheads') {
+    const n = ri(3, 4);
+    return {
+      q: `동전 ${n}개를 던져 <b>모두 앞면</b>이 나올 확률은 몇 분의 1일까요?`,
+      ans: 2 ** n, trap: n + 1, alts: [n * 2, 2 ** n / 2, n], unit: '분의 1',
+      why: `동전 하나가 앞면일 확률이 2분의 1이고 서로 영향을 주지 않으므로 곱합니다. 2를 ${n}번 곱해 ${2 ** n}분의 1입니다. "앞면 개수"로 세면 ${n + 1}가지지만 그 경우들의 가능성이 서로 달라서 그렇게 세면 안 됩니다.`,
+    };
+  }
+  return {
+    q: `동전 두 개를 던졌을 때 <b>하나는 앞면, 하나는 뒷면</b>이 나올 확률은 몇 분의 1일까요?`,
+    ans: 2, trap: 3, alts: [4, 6, 8], unit: '분의 1',
+    why: `경우를 (앞앞)(앞뒤)(뒤앞)(뒤뒤) 넷으로 세야 합니다. "앞뒤"와 "뒤앞"은 서로 다른 경우이므로 2/4 = 2분의 1입니다. (둘 다 앞)(하나씩)(둘 다 뒤) 셋으로 세면 3분의 1이라는 답이 나오는데, 이건 18세기 달랑베르도 빠졌던 함정입니다.`,
+  };
+}
+
 // [가족, 필요 레벨]. 레벨 = (레이팅-1000)/200
+// 랭크가 오를수록 새 가족이 열려서, 익숙해질 때쯤 처음 보는 문제가 나온다.
 const FAMILIES = [
   ['pigeon', 0, genPigeon],
   ['batball', 0, genBatBall],
@@ -362,11 +588,23 @@ const FAMILIES = [
   ['fence', 0, genFence],
   ['log', 0, genLog],
   ['tournament', 0, genTournament],
+  ['area', 0, genArea],
   ['clock', 1, genClock],
   ['snail', 1, genSnail],
   ['handshake', 1, genHandshake],
+  ['work', 1, genWork],
   ['speed', 2, genSpeed],
   ['scale', 2, genScale],
+  ['discount', 2, genDiscount],
+  ['average', 2, genAverage],
+  ['age', 3, genAge],
+  ['train', 3, genTrain],
+  ['stair', 3, genStair],
+  ['cube', 3, genCube],
+  ['angle', 4, genAngle],
+  ['mix', 4, genMix],
+  ['ratio', 4, genRatio],
+  ['coin', 4, genCoin],
 ];
 
 // 보기 4개 = 정답 + 함정 + 그 가족이 지정한 오답들.

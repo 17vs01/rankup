@@ -1182,11 +1182,12 @@ html, body {
 .pt-fb.bad { color: var(--bad); }
 
 /* ---------- 🪤 함정 퀴즈 ---------- */
+/* flex를 쓰면 <b> 강조가 별도 칸으로 떨어져 문장이 깨진다. 일반 문단으로 둔다. */
 .tq-q {
-  font-size: 16.5px; line-height: 1.75; word-break: keep-all;
-  padding: 0 6px; max-width: 340px; min-height: 86px;
-  display: flex; align-items: center;
+  font-size: 16.5px; line-height: 1.8; word-break: keep-all;
+  padding: 4px 6px; max-width: 340px; min-height: 90px;
 }
+.tq-q b { color: var(--accent); font-weight: 700; }
 .tq-why {
   width: 100%; max-width: 340px;
   background: var(--surface); border-left: 2px solid var(--accent);
