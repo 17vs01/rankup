@@ -19,6 +19,20 @@ function limitFor(level) {
   return Math.max(45, Math.round(150 * Math.pow(0.88, level - 1)));
 }
 
+// ---------- 분수 계산 ----------
+// 타일 값을 소수로 들고 있으면 5÷6이 0.83으로 보여서 다음 수를 가늠할 수 없다.
+// 분자/분모를 그대로 들고 다니며 "5/6"으로 보여준다.
+const gcd = (a, b) => b ? gcd(b, a % b) : Math.abs(a);
+function rat(n, d = 1) {
+  if (d < 0) { n = -n; d = -d; }
+  const k = gcd(Math.abs(n), d) || 1;
+  return { n: n / k, d: d / k };
+}
+const rAdd = (x, y) => rat(x.n * y.d + y.n * x.d, x.d * y.d);
+const rSub = (x, y) => rat(x.n * y.d - y.n * x.d, x.d * y.d);
+const rMul = (x, y) => rat(x.n * y.n, x.d * y.d);
+const rDiv = (x, y) => (y.n === 0 ? null : rat(x.n * y.d, x.d * y.n));
+
 // 네 수로 target을 만드는 풀이를 찾는다. 못 만들면 null.
 // 각 항은 { v: 값, s: 그 값을 만든 식 } 으로 들고 다녀서, 마지막에 식 전체를 보여줄 수 있다.
 function solve24(nums, target) {
@@ -50,23 +64,57 @@ function solve24(nums, target) {
   return sol && sol.startsWith('(') && sol.endsWith(')') ? sol.slice(1, -1) : sol;
 }
 
+// 중간값이 전부 정수인 풀이만 찾는다.
+// 분수를 거쳐야만 풀리는 문제(4 ÷ (1 − 5/6) 같은)는 난이도가 급으로 다르다.
+function solveInt(nums, target) {
+  function rec(arr) {
+    if (arr.length === 1) return arr[0].v === target ? arr[0].s : null;
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = 0; j < arr.length; j++) {
+        if (i === j) continue;
+        const rest = arr.filter((_, k) => k !== i && k !== j);
+        const a = arr[i], b = arr[j];
+        const ops = [['+', a.v + b.v], ['-', a.v - b.v], ['×', a.v * b.v]];
+        if (b.v !== 0 && a.v % b.v === 0) ops.push(['÷', a.v / b.v]);
+        for (const [sym, v] of ops) {
+          if ((sym === '+' || sym === '×') && i > j) continue;
+          const got = rec([...rest, { v, s: `(${a.s} ${sym} ${b.s})` }]);
+          if (got) return got;
+        }
+      }
+    }
+    return null;
+  }
+  const sol = rec(nums.map(n => ({ v: n, s: String(n) })));
+  return sol && sol.startsWith('(') && sol.endsWith(')') ? sol.slice(1, -1) : sol;
+}
+
 // 난이도: 목표값과 숫자 범위가 올라간다
 function makePuzzle(L) {
   const target = L < 1 ? 24 : L < 2.5 ? [24, 36][ri(0, 1)] : [24, 36, 48, 60][ri(0, 3)];
   const hi = Math.min(13, 9 + Math.floor(L * 1.5));
-  for (let t = 0; t < 800; t++) {
-    const nums = [ri(1, hi), ri(1, hi), ri(1, hi), ri(1, hi)];
-    const sol = solve24(nums, target);
-    if (sol) return { nums, target, sol };
+  const nums4 = () => [ri(1, hi), ri(1, hi), ri(1, hi), ri(1, hi)];
+
+  // 분수를 거쳐야만 풀리는 문제는 높은 랭크에서 가끔만 낸다.
+  // 낮은 랭크에 이게 나오면 "이게 말이 되나" 소리가 나온다.
+  if (L >= 2.5 && R() < 0.2) {
+    for (let t = 0; t < 300; t++) {
+      const nums = nums4();
+      if (solveInt(nums, target)) continue;      // 정수로 풀리면 이번엔 건너뛴다
+      const sol = solve24(nums, target);
+      if (sol) return { nums, target, sol, frac: true };
+    }
   }
-  return { nums: [4, 6, 2, 3], target: 24, sol: solve24([4, 6, 2, 3], 24) };
+  for (let t = 0; t < 600; t++) {
+    const nums = nums4();
+    const sol = solveInt(nums, target);
+    if (sol) return { nums, target, sol, frac: false };
+  }
+  return { nums: [4, 6, 2, 3], target: 24, sol: solveInt([4, 6, 2, 3], 24), frac: false };
 }
 
-const fmt = x => {
-  const r = Math.round(x);
-  if (Math.abs(x - r) < EPS) return String(r);
-  return String(Math.round(x * 100) / 100);
-};
+// 분수는 5/6처럼, 정수는 그대로
+const fmt = x => (x.d === 1 ? String(x.n) : `${x.n}/${x.d}`);
 
 export const t24Game = {
   id: 't24',
@@ -194,7 +242,7 @@ export const t24Game = {
         startLevelClock();
       }
       const p = makePuzzle(L);
-      tiles = p.nums.slice();
+      tiles = p.nums.map(n => rat(n));
       target = p.target;
       sol = p.sol;
       selIdx = -1; op = null; revealed = false;
@@ -225,10 +273,13 @@ export const t24Game = {
 
       const a = tiles[selIdx], c = tiles[i];
       let r;
-      if (op === '+') r = a + c;
-      else if (op === '-') r = a - c;
-      else if (op === '*') r = a * c;
-      else { if (Math.abs(c) < EPS) { $fb.textContent = '0으로 나눌 수 없습니다'; $fb.className = 't24-fb bad'; return; } r = a / c; }
+      if (op === '+') r = rAdd(a, c);
+      else if (op === '-') r = rSub(a, c);
+      else if (op === '*') r = rMul(a, c);
+      else {
+        r = rDiv(a, c);
+        if (!r) { $fb.textContent = '0으로 나눌 수 없습니다'; $fb.className = 't24-fb bad'; return; }
+      }
 
       history.push(tiles.slice());
       const rest = tiles.filter((_, k) => k !== selIdx && k !== i);
@@ -238,7 +289,7 @@ export const t24Game = {
       render();
 
       if (tiles.length === 1) {
-        const ok = Math.abs(tiles[0] - target) < EPS;
+        const ok = tiles[0].d === 1 && tiles[0].n === target;
         if (ok) {
           solved++; levelSolved++;
           const took = (performance.now() - startAt) / 1000;
