@@ -1,6 +1,7 @@
 // 암산 스프린트 (60초)
 // 난이도는 레이팅을 따라 상승. 기대 정답수는 레이팅 무관 ~11개로 자기평형.
 import { sfx } from '../audio.js';
+import { comboTick } from '../feedback.js';
 
 const DURATION = 60;
 const EXPECTED = 11;
@@ -124,6 +125,7 @@ export const mathGame = {
       if (!forceJudge && val !== cur.a && !over) return;
       if (val === cur.a) {
         correct++; streak++; sfx.combo(streak);
+        comboTick(ctx.body, streak);
         // 같은 클래스가 남아 있으면 애니메이션이 다시 안 돈다 — 둘 다 뗀 뒤 리플로
         ctx.body.classList.remove('flash-bad', 'flash-good'); void ctx.body.offsetWidth;
         ctx.body.classList.add('flash-good');

@@ -2,6 +2,7 @@
 // "47 × 3" 과 "150" 중 뭐가 큰가. 정확히 계산할 시간은 없고, 자릿수와 어림으로 찍어야 한다.
 // 암산이 "정확히 얼마인가"라면 이건 "대충 어느 쪽인가" — 장보기에서 실제로 쓰는 쪽이다.
 import { sfx } from '../audio.js';
+import { comboTick } from '../feedback.js';
 
 const DURATION = 60;
 const EXPECTED = 14;
@@ -124,6 +125,7 @@ export const compareGame = {
       } else if ((sideEl === $left) === leftBigger) {
         correct++; streak++; bestStreak = Math.max(bestStreak, streak);
         sfx.combo(streak);
+        comboTick(ctx.body, streak);
         sideEl.classList.add('correct');
         $hint.textContent = '';
       } else {

@@ -2,6 +2,7 @@
 // 1종목이면 5판, 2종목이면 각 3판, 3종목 모두면 각 1판.
 // 3종목 모두에서 레벨 기준을 전부 충족하면 레벨업. 상한 없음.
 import { sfx } from '../audio.js';
+import { judge, comboTick } from '../feedback.js';
 
 const COLORS = [
   { name: '빨강', css: '#ff5d6c' },
@@ -244,7 +245,10 @@ export const focusGame = {
         b.addEventListener('pointerdown', () => {
           if (locked || !cur) return;
           locked = true;
-          if (col.name === cur.ink.name) { correct++; streak++; sfx.combo(streak); }
+          if (col.name === cur.ink.name) {
+            correct++; streak++; sfx.combo(streak);
+            comboTick(ctx.body, streak);
+          }
           else { wrong++; streak = 0; sfx.bad(); }
           renderScore();
           ctx.delay(next, 120);
@@ -268,7 +272,9 @@ export const focusGame = {
         totalPts += Math.max(0, correct - wrong);
         stats.stroopNet = correct - wrong;
         parts.push(`스트룹 ${correct}`);
-        nextStage();
+        // 단계가 끝날 때 성적을 크게 보여주고 넘어간다 (판이 여러 단계로 이어져서)
+        judge(ctx.body, correct - wrong >= goal.stroop, `스트룹 ${correct} · 오답 ${wrong}`);
+        ctx.delay(nextStage, 950);
       });
     }
 
@@ -327,7 +333,8 @@ export const focusGame = {
         totalPts += Math.max(0, net);
         stats.gonogoNet = net;
         parts.push(`고/노고 ${hits}`);
-        nextStage();
+        judge(ctx.body, net >= goal.gonogo, `명중 ${hits} · 오탭 ${falses} · 놓침 ${misses}`);
+        ctx.delay(nextStage, 950);
       });
     }
 

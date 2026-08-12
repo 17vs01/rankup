@@ -2,6 +2,7 @@
 // 1953년 벨연구소 섀넌/하겔바거의 동전 맞히기 기계를 폰으로 옮긴 것.
 // 사람은 무작위를 못 만든다. AI가 다음 수를 미리 예측하고, 적중률 50%면 만점.
 import { sfx } from '../audio.js';
+import { comboTick } from '../feedback.js';
 
 const TRIALS = 60;
 const EXPECTED_MISS_RATE = 0.44; // 이 정도 피하면 본전. 완전 무작위(0.5)면 소폭 상승.
@@ -114,6 +115,7 @@ export const unpredictGame = {
         streakEvade++;
         bestEvade = Math.max(bestEvade, streakEvade);
         sfx.good();
+        comboTick(ctx.body, streakEvade);   // 5연속마다 "따돌리는 중"을 크게
         $verdict.textContent = streakEvade >= 4 ? `따돌리는 중 ${streakEvade}연속` : '따돌렸다';
         $verdict.className = 'up-verdict evaded';
       }

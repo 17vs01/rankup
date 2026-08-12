@@ -10,7 +10,6 @@ import { titleOf, bestTitle, nextTitleTier } from './titles.js';
 import {
   initPlatform, inToss, getNickname, setLocalNickname, canEditNickname,
   submitScore, openLeaderboard, hasLeaderboard, onBack,
-  getLeaderboardInfo,
 } from './platform.js';
 import { mathGame } from './games/math.js';
 import { lexiGame } from './games/lexi.js';
@@ -154,8 +153,8 @@ function renderHome() {
     $ovTitle.classList.add('hidden');
   }
 
-  // ----- 랭킹 카드 -----
-  refreshRankCard();
+  // ----- 이번 주 -----
+  renderWeekLine();
 
   // ----- 부식 알림: 붉은 상자 대신 조용한 한 줄 -----
   const $notice = $('#notice');
@@ -813,6 +812,32 @@ function endSession(game, result) {
   $('#btn-share').addEventListener('click', () => shareResult(game, result, delta, after));
   $('#btn-home').addEventListener('click', renderHome);
   show('#screen-result');
+
+  // 자랑할 만한 순간은 결과 한 줄로 흘려보내지 않는다 — 화면을 통째로 준다.
+  // 칭호가 승급보다 귀하니 둘 다면 칭호를 띄운다.
+  if (gotTitle) {
+    celebrate('칭호 획득', gotTitle.name, `${game.name} ${afterTier.name} 달성`);
+  } else if (tierUp) {
+    celebrate('승급', afterTier.name, `${game.name} ${nf(after)} LP`);
+  }
+}
+
+// ---------- 전체 화면 축하 ----------
+// 결과 화면 위에 덮어씌운다. 탭하면 사라지고 결과가 그대로 남는다.
+function celebrate(kicker, name, sub) {
+  const el = $('#celebrate');
+  $('#cel-kicker').textContent = kicker;
+  $('#cel-name').textContent = name;
+  $('#cel-sub').textContent = sub || '';
+  el.classList.remove('hidden');
+  const close = () => {
+    el.classList.add('hidden');
+    el.removeEventListener('click', close);
+  };
+  // 전환 직후의 tap-through를 막고 나서 닫기를 붙인다
+  setTimeout(() => el.addEventListener('click', close), 400);
+  // 오래 두면 갇힌 느낌이라 스스로도 사라진다
+  setTimeout(close, 4000);
 }
 
 // ---------- 스도쿠 별관 ----------
@@ -1002,12 +1027,18 @@ async function refreshNickname() {
   try { nickname = await getNickname(); } catch { nickname = null; }
 }
 
-// ---------- 랭킹 카드 (홈) ----------
-// 내 종합 점수는 항상 보여준다. 순위·상위 3명은 SDK가 읽기 API를 줄 때만
-// 채워지고, 없으면 "전체 순위" 버튼으로 안내한다 (platform.getLeaderboardInfo 참고).
-let lbInfo = null, lbFetchedAt = 0;
-const escapeHtml = s => String(s).replace(/[&<>"']/g,
-  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// ---------- 이번 주 한 줄 (홈) ----------
+// 앱인토스 SDK에는 리더보드를 "읽는" API가 없다 — 제출과 화면 열기뿐이다.
+// 그래서 1·2·3위를 앱 안에 그리려던 카드는 영영 빈 껍데기였다.
+// 내 점수 한 줄만 보여주고, 순위는 토스 화면에 맡긴다.
+function renderWeekLine() {
+  const w = weeklyBucket();
+  $('#wl-score').textContent = `${nf(w.lp)}점`;
+  const left = untilWeekEnd();
+  $('#wl-go').textContent = hasLeaderboard()
+    ? '순위 보기 →'
+    : `${fmtRemain(left)} 뒤 리셋`;
+}
 
 // 이번 주가 끝나기까지 남은 시간
 function untilWeekEnd() {
@@ -1018,40 +1049,6 @@ function untilWeekEnd() {
   end.setDate(end.getDate() + daysLeft);
   end.setHours(0, 0, 0, 0);
   return end.getTime() + 4 * 3600 * 1000 - d.getTime();
-}
-
-function renderRankCard() {
-  const w = weeklyBucket();
-  const me = nickname || '나';
-  $('#rank-mine').innerHTML = `
-    <span class="rm-rank">${escapeHtml(me)}${lbInfo && lbInfo.myRank ? ` · ${nf(lbInfo.myRank)}위` : ''}</span>
-    <span class="rm-score">${nf(w.lp)}점</span>`;
-  const $top = $('#rank-top');
-  const reset = `<div class="rank-note">이번 주 딴 LP로 겨룹니다 · ${fmtRemain(untilWeekEnd())} 뒤 리셋</div>`;
-  if (lbInfo && lbInfo.top) {
-    const medals = ['🥇', '🥈', '🥉'];
-    $top.innerHTML = lbInfo.top.map((e, i) => `
-      <div class="rank-row">
-        <span class="rr-medal">${medals[(e.rank || i + 1) - 1] || ''}</span>
-        <span class="rr-name">${escapeHtml(e.name)}</span>
-        ${e.score !== null ? `<span class="rr-score">${nf(Number(e.score) || 0)}점</span>` : ''}
-      </div>`).join('') + reset;
-  } else if (inToss()) {
-    $top.innerHTML = '<div class="rank-note">1·2·3위는 오른쪽 위 "전체 순위"에서 확인하세요</div>' + reset;
-  } else {
-    $top.innerHTML = '<div class="rank-note">토스 미니앱에서 열면 내 순위와 1·2·3위가 여기에 표시됩니다</div>' + reset;
-  }
-}
-
-function refreshRankCard() {
-  renderRankCard();
-  // 토스 안에서만, 1분에 한 번만 다시 물어본다
-  if (inToss() && Date.now() - lbFetchedAt > 60000) {
-    lbFetchedAt = Date.now();
-    getLeaderboardInfo().then(info => {
-      if (info) { lbInfo = info; renderRankCard(); }
-    });
-  }
 }
 
 // 최근 7일 하루치 획득 LP 막대. history의 delta를 날짜별로 합친다.
@@ -1333,7 +1330,10 @@ $('#btn-nick-save').addEventListener('click', () => {
 });
 
 // ---------- 플랫폼 (앱인토스) ----------
-$('#btn-leaderboard').addEventListener('click', () => openLeaderboard());
+// 이번 주 한 줄 = 순위 버튼. 토스 밖에서는 순위판이 없으니 이유를 알려준다.
+$('#btn-leaderboard').addEventListener('click', async () => {
+  if (!(await openLeaderboard())) toast('토스 미니앱에서 순위를 볼 수 있어요');
+});
 
 let lastBackAt = 0;
 function handleBack() {
@@ -1377,6 +1377,6 @@ else renderHome();
 
 initPlatform().then(() => {
   onBack(handleBack);
-  refreshNickname().then(refreshRankCard);   // 별명·순위가 오면 카드 갱신
-  if (hasLeaderboard()) $('#btn-leaderboard').classList.remove('hidden');
+  refreshNickname();
+  renderWeekLine();   // 순위 버튼 문구는 SDK가 붙은 뒤에야 정해진다
 });

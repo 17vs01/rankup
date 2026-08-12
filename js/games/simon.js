@@ -1,6 +1,9 @@
-// 사이먼 — 순서 기억
+// 메아리 — 순서 기억
 // 불빛이 순서대로 켜지면 그대로 따라 누른다. 성공할 때마다 한 칸씩 길어진다.
 // 기억력(위치 기억)과 달리 "순서"를 붙드는 능력이라 따로 잰다.
+//
+// 이름 주의: 같은 방식의 원조 전자 게임 "Simon"은 Hasbro의 등록 상표다.
+// 방식 자체는 보호되지 않지만 이름은 쓰면 안 된다. 내부 id는 코드에만 남는다.
 import { sfx } from '../audio.js';
 import { judge } from '../feedback.js';
 
@@ -14,7 +17,7 @@ const LIVES = 3;
 
 export const simonGame = {
   id: 'simon',
-  name: '사이먼',
+  name: '메아리',
   icon: '🎹',
   desc: '불빛 순서를 그대로 따라가기',
   run(ctx) {

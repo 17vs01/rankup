@@ -62,20 +62,12 @@ export async function getUserKey() {
   return null;
 }
 
-// ---------- 종합 점수 ----------
-// 토스 리더보드는 미니앱당 하나뿐이라, 12종목을 한 숫자로 합쳐 올린다.
-//
-// 안 해본 종목은 평균에서 뺀다. 그러면 한 종목만 파고 1위 하는 게 가능해지므로,
-// 플레이한 종목 수에 따라 최대 절반까지 깎는다.
-export function compositeScore(state, gameIds) {
-  const played = gameIds.filter(id => state.disc[id] && state.disc[id].sessions > 0);
-  if (!played.length) return 0;
-  const avg = played.reduce((a, id) => a + state.disc[id].rating, 0) / played.length;
-  const breadth = 0.5 + 0.5 * (played.length / gameIds.length);
-  return Math.round(avg * breadth);
-}
+// ---------- 점수 제출 ----------
+// 토스 리더보드는 미니앱당 하나뿐이다. 처음엔 전 종목 평균(종합 점수)을 올렸는데,
+// 평생 누적이라 상위권이 고착돼 새 유저가 포기한다. 지금은 "이번 주에 딴 LP"를
+// 올린다 (main.js의 weeklyScore). 월요일 새벽 4시에 리셋된다.
 
-/** 종합 점수를 토스 리더보드에 올린다. 토스 밖에서는 아무것도 안 한다. */
+/** 점수를 토스 리더보드에 올린다. 토스 밖에서는 아무것도 안 한다. */
 export async function submitScore(value) {
   if (!sdk?.Game?.setLeaderboardScore) return { ok: false, reason: 'NOT_IN_TOSS' };
   try {
@@ -86,37 +78,9 @@ export async function submitScore(value) {
   }
 }
 
-/**
- * 리더보드 상위권·내 순위 조회.
- * 현재 확인된 앱인토스 SDK에는 리더보드를 "읽는" API가 문서화돼 있지 않다
- * (제출 setLeaderboardScore / 화면 열기 openLeaderboard 뿐). 그래서 알려진
- * 이름 후보를 방어적으로 시도하고, 없으면 null을 돌려준다 — 화면은 null이면
- * "전체 순위" 버튼으로 안내한다. SDK가 읽기 API를 열면 여기만 고치면 된다.
- * 반환: { myRank: number|null, top: [{rank, name, score}] | null } | null
- */
-export async function getLeaderboardInfo() {
-  const api = sdk?.Game;
-  if (!api) return null;
-  for (const fn of ['getLeaderboard', 'getLeaderboardRank', 'getLeaderboardRanks', 'getLeaderboardScores']) {
-    if (typeof api[fn] !== 'function') continue;
-    try {
-      const r = await api[fn]({ count: 3 });
-      if (!r) continue;
-      const list = r.ranks || r.list || r.entries || r.scores || (Array.isArray(r) ? r : null);
-      const top = Array.isArray(list) && list.length
-        ? list.slice(0, 3).map((e, i) => ({
-          rank: e.rank || i + 1,
-          name: e.nickname || e.name || e.userName || '?',
-          score: e.score ?? e.value ?? null,
-        }))
-        : null;
-      const myRank = (typeof r.myRank === 'number' && r.myRank)
-        || (typeof r.rank === 'number' && r.rank) || null;
-      if (top || myRank) return { myRank, top };
-    } catch { /* 다음 후보 이름으로 */ }
-  }
-  return null;
-}
+// 순위를 "읽는" API는 앱인토스에 없다 (제출과 화면 열기뿐).
+// 그래서 앱 안에 1·2·3위를 그리려던 시도는 접고 openLeaderboard에 맡긴다.
+// 나중에 읽기 API가 생기면 여기에 추가하면 된다.
 
 /** 토스 리더보드 화면을 띄운다 */
 export async function openLeaderboard() {

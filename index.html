@@ -37,16 +37,6 @@
         <div class="ov-title hidden" id="ov-title"></div>
       </div>
 
-      <!-- 랭킹 -->
-      <div class="rank-card">
-        <div class="rank-head">
-          <span>🏆 랭킹</span>
-          <button class="rank-open hidden" id="btn-leaderboard">전체 순위 →</button>
-        </div>
-        <div class="rank-mine" id="rank-mine"></div>
-        <div class="rank-top" id="rank-top"></div>
-      </div>
-
       <div class="notice hidden" id="notice"></div>
 
       <!-- 오늘의 훈련 -->
@@ -66,6 +56,13 @@
           <span class="cta-name" id="cta-name"></span>
         </button>
       </div>
+
+      <!-- 이번 주 (랭킹) -->
+      <button class="week-line" id="btn-leaderboard">
+        <span class="wl-label">🏆 이번 주</span>
+        <span class="wl-score" id="wl-score">0점</span>
+        <span class="wl-go" id="wl-go"></span>
+      </button>
 
       <!-- 목록 -->
       <div class="list-head">
@@ -287,6 +284,12 @@
   </section>
 </div>
 <div class="toast hidden" id="toast"></div>
+<div class="celebrate hidden" id="celebrate">
+  <div class="cel-kicker" id="cel-kicker"></div>
+  <div class="cel-name" id="cel-name"></div>
+  <div class="cel-sub" id="cel-sub"></div>
+  <div class="cel-tap">탭해서 계속</div>
+</div>
 <script type="module" src="js/main.js"></script>
 <script>
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

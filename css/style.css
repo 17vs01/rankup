@@ -971,39 +971,6 @@ html, body {
 /* ---------- 상단 버튼 묶음 · 토스트 · 별명 ---------- */
 .top-btns { display: flex; gap: 2px; }
 
-/* ---------- 홈 · 랭킹 카드 ---------- */
-.rank-card {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 15px 18px 13px; margin-bottom: 14px;
-}
-.rank-head {
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--text-faint);
-  margin-bottom: 10px;
-}
-.rank-open {
-  background: none; border: none; color: var(--accent); font-family: inherit;
-  font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 0 4px 12px;
-  letter-spacing: 0;
-}
-.rank-mine {
-  display: flex; justify-content: space-between; align-items: baseline;
-  padding-bottom: 10px; border-bottom: 1px solid var(--line);
-  font-size: 14px; font-weight: 600;
-}
-.rank-mine .rm-score { color: var(--accent); font-size: 17px; }
-.rank-mine .rm-rank { color: var(--text); }
-.rank-top { padding-top: 9px; display: flex; flex-direction: column; gap: 7px; }
-.rank-row {
-  display: flex; align-items: baseline; gap: 9px; font-size: 13.5px;
-}
-.rank-row .rr-medal { flex: 0 0 auto; font-size: 15px; }
-.rank-row .rr-name {
-  flex: 1; min-width: 0; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.rank-row .rr-score { flex: 0 0 auto; color: var(--text-dim); }
-.rank-note { font-size: 12px; color: var(--text-faint); line-height: 1.6; word-break: keep-all; }
 .toast {
   position: fixed; left: 50%; bottom: calc(38px + env(safe-area-inset-bottom));
   transform: translateX(-50%); z-index: 60; white-space: nowrap;
@@ -1048,6 +1015,63 @@ html, body {
 
 /* ---------- 콤보 (연속 정답) ---------- */
 .combo { color: var(--accent); font-weight: 700; margin-left: 8px; }
+
+/* 마디마다 터지는 콤보 — 문제를 가리지 않게 위쪽에 크게 뜬다 */
+.combo-burst {
+  position: absolute; top: 6%; left: 50%; transform: translateX(-50%);
+  z-index: 6; pointer-events: none;
+  display: flex; align-items: baseline; gap: 6px;
+  color: var(--accent); text-shadow: 0 0 30px var(--accent);
+  animation: cbPop .85s ease forwards;
+}
+.combo-burst.hot { color: var(--bad); text-shadow: 0 0 34px var(--bad); }
+.cb-num { font-size: 62px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
+.cb-label { font-size: 17px; font-weight: 700; letter-spacing: .04em; }
+@keyframes cbPop {
+  0%   { opacity: 0; transform: translateX(-50%) scale(.6); }
+  18%  { opacity: 1; transform: translateX(-50%) scale(1.12); }
+  32%  { transform: translateX(-50%) scale(1); }
+  68%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(1); }
+}
+
+/* ---------- 승급·칭호 전체 화면 축하 ---------- */
+.celebrate {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 0 28px; text-align: center;
+  background: var(--bg);
+  animation: celIn .45s ease;
+}
+.cel-kicker { font-size: 12px; font-weight: 700; letter-spacing: .18em; color: var(--text-faint); }
+.cel-name {
+  font-size: 44px; font-weight: 800; letter-spacing: -.03em; line-height: 1.15;
+  color: var(--accent); text-shadow: 0 0 46px var(--accent-soft);
+  word-break: keep-all;
+}
+.cel-sub { font-size: 14.5px; color: var(--text-dim); word-break: keep-all; line-height: 1.6; }
+.cel-tap {
+  position: absolute; bottom: calc(44px + env(safe-area-inset-bottom));
+  font-size: 12px; color: var(--text-faint); letter-spacing: .08em;
+  animation: celBlink 1.6s ease-in-out infinite;
+}
+@keyframes celIn {
+  from { opacity: 0; transform: scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes celBlink { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+/* ---------- 홈 · 이번 주 한 줄 ---------- */
+.week-line {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  background: none; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 13px 16px; cursor: pointer; font-family: inherit; margin-bottom: 22px;
+  transition: background .12s;
+}
+.week-line:active { background: var(--surface); }
+.wl-label { font-size: 13px; color: var(--text-dim); flex: 0 0 auto; }
+.wl-score { font-size: 15px; font-weight: 700; color: var(--accent); flex: 1; text-align: left; }
+.wl-go { font-size: 12px; color: var(--text-faint); flex: 0 0 auto; }
 
 /* ---------- ⚡ 집중력 · 종목 선택 ---------- */
 .fp-wrap { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 330px; }
@@ -1099,7 +1123,7 @@ html, body {
 .sh-cell.bad { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
 .sh-note { font-size: 12.5px; color: var(--text-faint); min-height: 20px; }
 
-/* ---------- 🎹 사이먼 ---------- */
+/* ---------- 🎹 메아리 ---------- */
 .sm-head {
   display: flex; justify-content: space-between; align-items: center;
   width: 100%; max-width: 330px; font-size: 12px; color: var(--text-faint);

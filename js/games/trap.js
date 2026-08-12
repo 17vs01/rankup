@@ -11,6 +11,7 @@
 //    시간이 같은 평균 속도는 산술평균이 정답이고, 선물 교환은 두 배가 정답이다.
 //    이때는 과하게 생각한 사람이 걸리도록 trap을 반대로 놓는다.
 import { sfx } from '../audio.js';
+import { judge } from '../feedback.js';
 
 const ROUNDS = 5;
 const EXPECTED = 3.3;
@@ -914,9 +915,11 @@ export const trapGame = {
       if (locked) return;
       locked = true;
       const ok = v === cur.ans;
-      if (ok) { correct++; sfx.good(); btn.classList.add('correct'); }
+      // 한 문제에 오래 매달리는 종목이라 판정은 크게 띄운다
+      if (ok) { correct++; sfx.good(); judge(ctx.body, true); btn.classList.add('correct'); }
       else {
         sfx.bad();
+        judge(ctx.body, false);
         btn.classList.add('wrong');
         for (const c of $c.children) if (Number(c.dataset.v) === cur.ans) c.classList.add('correct');
         if (v === cur.trap) trapped++;

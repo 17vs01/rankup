@@ -2,6 +2,7 @@
 // 수 몇 개가 어떤 규칙을 따라 늘어서 있다. 규칙을 알아내서 다음 수를 고른다.
 // 틀리면 규칙을 보여준다 — "아하"가 다음 판의 무기가 되는, 순수 귀납 추론 종목.
 import { sfx } from '../audio.js';
+import { comboTick } from '../feedback.js';
 
 const DURATION = 60;
 const EXPECTED = 7;
@@ -161,6 +162,7 @@ export const patternGame = {
       if (ok) {
         correct++; streak++; bestStreak = Math.max(bestStreak, streak);
         sfx.combo(streak);
+        comboTick(ctx.body, streak);
         btn.classList.add('correct');
         // 맞혔어도 규칙을 잠깐 보여준다 — 찍어서 맞힌 것도 배움이 되게
         $fb.textContent = `규칙: ${cur.rule}`;

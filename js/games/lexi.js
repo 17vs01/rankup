@@ -5,6 +5,7 @@
 import { VOCAB } from '../data/vocab.js';
 import { KOR_VOCAB, KOR_CATS } from '../data/korvocab.js';
 import { sfx } from '../audio.js';
+import { comboTick } from '../feedback.js';
 
 const DURATION = 60;
 const EXPECTED = 12;
@@ -207,6 +208,7 @@ export const lexiGame = {
         updateLeitner(cur.src === 'kor' ? korStore : engStore, cur.idx, ok);
         if (ok) {
           correct++; streak++; sfx.combo(streak);
+          comboTick(ctx.body, streak);
           btn.classList.add('correct');
         } else {
           wrong++; streak = 0; sfx.bad();
