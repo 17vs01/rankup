@@ -1,5 +1,5 @@
 // 오프라인 캐시 서비스워커
-const CACHE = 'rankup-v36';
+const CACHE = 'rankup-v37';
 const ASSETS = [
   '.',
   'index.html',
