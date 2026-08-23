@@ -7,7 +7,7 @@
 - **WebView 미니앱으로 간다.** 앱인토스는 HTML5 게임을 지원하고, WebView 환경은 프로젝트에 설정한 웹 라우터 규칙을 그대로 따른다. 지금의 순수 ES 모듈 구조가 그대로 맞다. React Native로 가려면 전면 재작성이라 선택하지 않는다.
 - **리더보드는 미니앱당 딱 1개다.** 종목별로 나눌 수 없다. 그래서 **이번 주에 딴 LP** 하나만 올리고, 종목별 기록은 앱 안에서 보여준다.
 - **순위를 읽는 API는 없다.** 제출(`setLeaderboardScore`)과 화면 열기(`openLeaderboard`)뿐이라, 앱 안에 1·2·3위를 그릴 수 없다. 홈은 내 주간 점수 한 줄 + "순위 보기" 버튼으로 끝낸다.
-- SDK 호출은 전부 `js/platform.js` 한 곳에 모아 두었다. 토스에 올릴 때 그 파일만 고치면 된다.
+- SDK 호출은 전부 `js/platform.js` 한 곳에 모아 두었다. 실제 SDK를 꽂는 곳은 `toss/entry.js` 하나뿐이다.
 
 ## 확인한 SDK (import: `@apps-in-toss/web-framework`)
 
@@ -18,8 +18,9 @@
 | 순위 화면 | `Game.openLeaderboard()` | 토스가 리더보드 웹뷰를 띄워준다 |
 | 사용자 식별 | `getUserKeyForGame()` | 게임 카테고리 전용. 미니앱별 고유 hash. 비게임은 `getAnonymousKey` |
 | 저장소 | `Storage.getItem/setItem/removeItem/clearItems` | **기기를 바꿔도 유지된다.** 비동기 |
-| 뒤로가기 | `useBackEvent` (RN) / 화면 이벤트 | 뒤로가기 동작을 직접 정할 수 있다 |
-| Safe Area | `useSafeAreaInsets` (RN) | 웹에서는 이미 `env(safe-area-inset-*)`로 대응 중 |
+| 뒤로가기 | `graniteEvent.addEventListener('backEvent', …)` | v3에서 확인한 실제 이름. `useBackEvent`가 아니다 |
+| Safe Area | `getSafeAreaInsets()` | 웹에서는 이미 `env(safe-area-inset-*)`로 대응 중이라 안 쓴다 |
+| 진동 | `generateHapticFeedback({ type })` | iOS WebView는 `navigator.vibrate`가 안 먹는다 |
 | 서버 시간 | 네트워크 API | 치팅 방지용. 시간 기록 검증에 쓸 수 있다 |
 
 문서: https://developers-apps-in-toss.toss.im/documentation
@@ -60,11 +61,47 @@
 
 ### 3. 출시 준비 (코드 밖 작업 — 콘솔 가입 등은 직접 해야 함)
 - [ ] 앱인토스 콘솔 가입, 미니앱 등록, 리더보드 생성
-- [ ] `@apps-in-toss/web-framework` 설치 → 번들러 도입 필요 (지금은 빌드 없음)
-- [ ] `platform.js`의 `loadSdk()`를 실제 import로 교체
+- [x] `@apps-in-toss/web-framework` 설치 + 번들러(Vite) — 아래 '빌드' 참고
+- [x] SDK 연결 — `toss/entry.js`가 전역에 꽂고 `platform.js`가 그걸 읽는다
 - [x] localStorage → 토스 Storage 이관 (아래 '저장소' 참고 — 코드는 끝, SDK만 붙이면 된다)
 - [ ] 게임 출시 가이드 / 서비스별 주의사항 확인
 - [ ] 사업자 등록: 인앱광고·인앱결제·토스페이를 쓸 때만 필요
+
+## 빌드 — 웹은 그대로, 토스만 번들링
+
+**웹판(GitHub Pages)은 빌드가 없다.** `index.html`이 `js/`를 그대로 불러 쓰는 순수 ES 모듈
+구조를 지켰다. 번들러는 오직 토스판을 위해서만 돈다 — 이유는 하나뿐이다. SDK가
+`@apps-in-toss/web-framework`라는 bare import라 브라우저가 못 풀기 때문이다.
+
+```
+toss/entry.js   ← 이 파일만 SDK를 안다. window.__APPS_IN_TOSS__에 꽂고 본체를 띄운다
+js/platform.js  ← 그 전역만 본다. 본체 코드는 한 줄도 토스를 모른다
+```
+
+| 명령 | 하는 일 |
+|---|---|
+| `npm run build:toss` | `toss/index.html` 생성 → Vite로 `dist/`에 번들 |
+| `npm run ait:build` | 위 + `ait build` → 배포용 `rankup.ait` |
+| `npm run ait:deploy` | 앱인토스에 업로드 (토큰 필요: `npx ait token add`) |
+| `npm run dev:toss` | 토스판 개발 서버 |
+
+`toss/index.html`은 **웹판에서 찍어낸다** (`scripts/make-toss-html.js`). 마크업을 두 벌로
+두면 반드시 어긋나므로, 화면은 웹판만 고치면 된다. 토스판에서 빼는 건 두 가지뿐이다 —
+manifest/아이콘(토스가 껍데기를 씌운다)과 서비스워커 등록(토스가 자체 캐시를 쓴다).
+빠졌는지는 스크립트가 매번 검사하고, 남아 있으면 빌드를 세운다.
+
+`dist/`, `toss/index.html`, `*.ait`는 생성물이라 커밋하지 않는다.
+
+### 확인한 실제 API (v3.0.5)
+
+문서만 보고 짐작했던 것 중 하나가 틀려서 바로잡았다.
+
+| 쓰는 것 | 실제 이름 |
+|---|---|
+| 리더보드 | `Game.openLeaderboard` · `Game.setLeaderboardScore` · `Game.getUserProfile` |
+| 저장소 | `Storage.getItem / setItem / removeItem / clearItems` |
+| 뒤로가기 | `graniteEvent.addEventListener('backEvent', { onEvent })` — `useBackEvent`가 아니다 |
+| 진동 | `generateHapticFeedback({ type })` — iOS WebView는 `navigator.vibrate`가 안 먹는다 |
 
 ## 저장소 — 메모리 우선, 뒤로 미뤄 쓰기
 

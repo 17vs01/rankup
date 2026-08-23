@@ -1,0 +1,17 @@
+{
+  "name": "rankup",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "RANKUP — 두뇌 랭크전",
+  "devDependencies": {
+    "@apps-in-toss/web-framework": "^3.0.5",
+    "vite": "^8.2.2"
+  },
+  "scripts": {
+    "build:toss": "node scripts/make-toss-html.js && vite build",
+    "dev:toss": "node scripts/make-toss-html.js && vite",
+    "ait:build": "npm run build:toss && ait build",
+    "ait:deploy": "ait deploy"
+  }
+}

@@ -98,11 +98,14 @@ let backHandler = null;
 export function onBack(handler) {
   backHandler = handler;
 
-  if (sdk?.useBackEvent) {
-    // 토스 안: SDK 이벤트에 연결한다 (번들러 도입 후 실제 훅으로 교체)
+  if (sdk?.graniteEvent?.addEventListener) {
+    // 토스 안: 시스템 뒤로가기를 구독한다.
+    // 토스는 "처리했다"는 반환값을 보지 않는다 — 핸들러가 화면을 되돌리는 것으로 끝낸다.
     try {
-      const ctl = sdk.useBackEvent();
-      ctl.addEventListener(() => { backHandler && backHandler(); });
+      sdk.graniteEvent.addEventListener('backEvent', {
+        onEvent: () => { if (backHandler) backHandler(); },
+        onError: () => { /* 구독이 끊겨도 앱은 계속 돈다 */ },
+      });
       return;
     } catch { /* 아래 웹 방식으로 */ }
   }
@@ -116,6 +119,22 @@ export function onBack(handler) {
       if (handled) history.pushState({ rankup: 1 }, '');
     });
   } catch { /* history를 못 쓰는 환경이면 뒤로가기는 기본 동작 */ }
+}
+
+// ---------- 진동(햅틱) ----------
+// iOS WebView에는 navigator.vibrate가 없다. 토스 안에서는 SDK 햅틱을 쓰고,
+// 밖에서는 예전처럼 vibrate로 떨어진다. audio.js가 이 함수만 부른다.
+const HAPTIC_FALLBACK = {
+  tickWeak: 12, tap: 15, tickMedium: 18,
+  success: [30, 40, 30], error: [30, 40, 30],
+  confetti: [40, 60, 40, 60, 80],
+};
+
+export function haptic(type) {
+  if (sdk?.generateHapticFeedback) {
+    try { sdk.generateHapticFeedback({ type }); return; } catch { /* 아래로 */ }
+  }
+  try { navigator.vibrate?.(HAPTIC_FALLBACK[type] ?? 15); } catch { /* 무음 환경 */ }
 }
 
 // ---------- 저장소 ----------

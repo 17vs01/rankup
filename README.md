@@ -318,7 +318,18 @@ js/
                         sudoku (랭크 밖 별관 — GAMES 배열에 없다)
 ```
 
-빌드 도구 없음. 의존성 없음. 순수 ES 모듈.
+웹판은 **빌드 도구 없음, 의존성 없음, 순수 ES 모듈**. 푸시하면 그대로 배포된다.
+
+토스 미니앱으로 낼 때만 번들러가 돈다 — SDK가 브라우저는 못 푸는 bare import라서다.
+그 한 가지 때문에 본체 구조를 바꾸지는 않았다: `toss/entry.js`만 SDK를 알고 전역에
+꽂아주면, `js/platform.js`가 그 전역을 읽는다. 본체 코드는 한 줄도 토스를 모른다.
+
+```bash
+npm run build:toss   # dist/ 에 토스용 번들
+npm run ait:build    # + rankup.ait (배포 아티팩트)
+```
+
+자세한 건 [TOSS.md](TOSS.md).
 
 ### 게임 추가하는 법
 
