@@ -1,5 +1,6 @@
 import {
   loadState, saveState, applyDecay, recordSession, recordSudoku, getVariant,
+  initStorage, flushState, clearState,
 } from './storage.js';
 import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.js';
 import { sfx } from './audio.js';
@@ -46,7 +47,7 @@ const GROUPS = [
 const GAMES = GROUPS.flatMap(g => g.games);
 const $ = sel => document.querySelector(sel);
 
-let state = loadState();
+let state = loadState();   // 저장소를 읽기 전이라 기본값. boot()에서 다시 채운다
 let activeTimers = [];    // 세션 중 타이머 (중단 시 정리)
 let sessionTimer = null;  // 카운트다운 인터벌
 let currentGame = null;
@@ -1311,9 +1312,9 @@ $('#btn-reset').addEventListener('click', () => {
 
 $('#btn-reset-cancel').addEventListener('click', () => $('#reset-confirm').classList.add('hidden'));
 
-$('#btn-reset-apply').addEventListener('click', () => {
+$('#btn-reset-apply').addEventListener('click', async () => {
   const keepTheme = state.theme;
-  localStorage.removeItem('rankup-state-v1');
+  await clearState();
   state = loadState();
   state.theme = keepTheme;   // 화면 설정까지 초기화할 이유는 없다
   saveState(state);
@@ -1371,12 +1372,30 @@ function showIntro() {
   show('#screen-intro');
 }
 
-applyTheme(state.theme);
-if (!state.onboarded && state.totalSessions === 0) showIntro();
-else renderHome();
+// ---------- 부팅 ----------
+// 토스 Storage가 비동기라 시작 순서가 정해져 있다.
+//   플랫폼(SDK 확인) → 저장소 읽기 → 상태 복원 → 화면
+// 저장소가 늦거나 실패해도 기본 상태로 앱은 뜬다.
+async function boot() {
+  try { await initPlatform(); } catch { /* 토스 밖으로 간주 */ }
+  try { await initStorage(); } catch { /* 기본 상태로 시작 */ }
+  state = loadState();
 
-initPlatform().then(() => {
+  applyTheme(state.theme);
+  if (!state.onboarded && state.totalSessions === 0) showIntro();
+  else renderHome();
+
   onBack(handleBack);
   refreshNickname();
   renderWeekLine();   // 순위 버튼 문구는 SDK가 붙은 뒤에야 정해진다
-});
+}
+
+function reveal() { document.documentElement.classList.remove('booting'); }
+
+// 앱이 가려지거나 닫히기 직전에 밀린 기록을 강제로 내보낸다.
+// 뒤로 미뤄 쓰기라 이게 없으면 마지막 판이 날아갈 수 있다.
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushState(); });
+window.addEventListener('pagehide', () => flushState());
+
+// 부팅이 어디서 실패해도 화면은 반드시 보여준다
+boot().catch(() => { state = loadState(); renderHome(); }).finally(reveal);

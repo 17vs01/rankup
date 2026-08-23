@@ -115,6 +115,9 @@ html, body {
 }
 
 #app { height: 100%; max-width: 460px; margin: 0 auto; position: relative; }
+/* 저장소(토스 Storage)를 읽는 동안은 가려 둔다.
+   안 그러면 밝은 테마 사용자에게 어두운 기본 화면이 한 번 번쩍인다. */
+html.booting #app { visibility: hidden; }
 
 .screen {
   display: none;

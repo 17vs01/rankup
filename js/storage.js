@@ -1,7 +1,47 @@
-// localStorage 기반 상태 저장
+// 상태 저장 — 메모리 우선, 쓰기는 뒤로 미룬다
+//
+// 토스 Storage는 기기를 바꿔도 유지되지만 비동기다. 그렇다고 saveState를 부르는
+// 스무 곳을 전부 await로 바꾸면 게임 코드까지 async로 물든다. 대신 이렇게 한다.
+//   읽기 — 시작할 때 initStorage()로 딱 한 번. 그 뒤로는 메모리에서 판다
+//   쓰기 — saveState는 메모리만 갱신하고 즉시 돌아온다. 실제 기록은 모아서 흘려보낸다
+// 앱이 가려지거나 닫힐 때 flushState()로 강제로 밀어낸다 (main.js 참고).
 import { START_RATING, pendingDecay } from './rating.js';
+import { storage } from './platform.js';
 
 const KEY = 'rankup-state-v1';
+const FLUSH_MS = 400;
+
+let raw = null;        // 마지막으로 확정된 JSON 문자열 (아직 안 읽었으면 null)
+let dirty = false;     // 아직 저장소에 못 밀어낸 변경이 있는가
+let flushTimer = null;
+
+/** 시작할 때 한 번. 토스 Storage → 기기 저장소 순으로 찾고, 필요하면 이관한다. */
+export async function initStorage() {
+  let found = null;
+  try { found = await storage.get(KEY); } catch { found = null; }
+  raw = found;
+}
+
+/** 밀린 쓰기를 지금 내보낸다. 실패하면 dirty를 되살려 다음에 다시 시도한다. */
+export async function flushState() {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  if (!dirty || raw == null) return;
+  dirty = false;
+  try { await storage.set(KEY, raw); } catch { dirty = true; }
+}
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => { flushTimer = null; flushState(); }, FLUSH_MS);
+}
+
+/** 기록을 통째로 지운다 (설정 → 초기화) */
+export async function clearState() {
+  raw = null;
+  dirty = false;
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  try { await storage.remove(KEY); } catch { /* 무시 */ }
+}
 
 // 랭크 종목. 스도쿠는 여기 없다 — 랭크 밖 별관이라 LP·부식·리그와 무관하다.
 const DISC_IDS = [
@@ -91,7 +131,7 @@ function freshState() {
 
 export function loadState() {
   let s;
-  try { s = JSON.parse(localStorage.getItem(KEY)); } catch { s = null; }
+  try { s = raw == null ? null : JSON.parse(raw); } catch { s = null; }
   if (!s || !s.disc) s = freshState();
   // 이관: 어휘(vocab) + 우리말(korvocab) → 어휘력(lexi)으로 통합.
   // 기존 두 종목의 LP를 판수 가중 평균으로 물려받는다. 라이트너 데이터
@@ -231,8 +271,11 @@ export function loadState() {
   return s;
 }
 
+// 겉보기에는 동기다. 메모리를 먼저 갱신하고 실제 기록은 뒤로 미룬다.
 export function saveState(s) {
-  localStorage.setItem(KEY, JSON.stringify(s));
+  raw = JSON.stringify(s);
+  dirty = true;
+  scheduleFlush();
 }
 
 // 부식을 지연 적용하고 적용된 총량 반환.

@@ -120,19 +120,31 @@ export function onBack(handler) {
 
 // ---------- 저장소 ----------
 // 토스 Storage는 기기를 바꿔도 데이터가 유지되지만 비동기다.
-// 지금 앱은 localStorage(동기)를 쓰고 있어서, 이관은 storage.js를 함께 손봐야 한다.
-// 우선 인터페이스만 맞춰 둔다. (TOSS.md의 '출시 준비' 참고)
+// 토스 밖에서는 localStorage로 떨어진다. 어느 쪽이든 storage.js가 이 어댑터만 쓴다.
+//
+// 토스 쪽이 실패하면 localStorage로 물러난다 — 기록이 사라지는 것보다는 낫다.
 export const storage = {
   async get(key) {
     if (sdk?.Storage?.getItem) {
-      try { return await sdk.Storage.getItem(key); } catch { /* 아래로 */ }
+      try {
+        const v = await sdk.Storage.getItem(key);
+        if (v != null) return v;
+      } catch { /* 아래로 */ }
     }
     try { return localStorage.getItem(key); } catch { return null; }
   },
   async set(key, value) {
+    let saved = false;
     if (sdk?.Storage?.setItem) {
-      try { await sdk.Storage.setItem(key, value); return; } catch { /* 아래로 */ }
+      try { await sdk.Storage.setItem(key, value); saved = true; } catch { /* 아래로 */ }
     }
-    try { localStorage.setItem(key, value); } catch { /* 저장 실패는 무시 */ }
+    // 토스에 썼더라도 기기에도 남겨 둔다. SDK가 흔들려도 마지막 판이 안 날아간다.
+    try { localStorage.setItem(key, value); } catch { if (!saved) throw new Error('저장 실패'); }
+  },
+  async remove(key) {
+    if (sdk?.Storage?.removeItem) {
+      try { await sdk.Storage.removeItem(key); } catch { /* 아래로 */ }
+    }
+    try { localStorage.removeItem(key); } catch { /* 무시 */ }
   },
 };
