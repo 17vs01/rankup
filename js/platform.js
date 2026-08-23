@@ -90,6 +90,17 @@ export async function openLeaderboard() {
 
 export function hasLeaderboard() { return !!sdk?.Game?.openLeaderboard; }
 
+// ---------- 화면 고정 ----------
+// 세로 전용으로 만든 화면이라 가로로 눕히면 게임판이 깨진다. 토스에서는 방향을
+// 아예 잠근다. iOS 가장자리 스와이프도 끈다 — 판 도중에 화면이 밀려 나가면
+// 기록이 날아가고, 뒤로가기는 이미 graniteEvent로 받고 있다.
+// (둘 다 토스앱 5.215.0+. 낮은 버전이면 SDK가 알아서 아무 일도 안 한다)
+export async function lockScreen() {
+  if (!sdk?.Screen) return;
+  try { await sdk.Screen.setOrientation({ type: 'portrait' }); } catch { /* 무시 */ }
+  try { await sdk.Screen.setIosSwipeBack({ isEnabled: false }); } catch { /* 무시 */ }
+}
+
 // ---------- 뒤로가기 ----------
 // 토스에서는 SDK가 뒤로가기 이벤트를 주고, 밖에서는 history를 쓴다.
 // 어느 쪽이든 handler가 true를 돌려주면 "내가 처리했으니 나가지 마라"는 뜻이다.
@@ -153,12 +164,14 @@ export const storage = {
     try { return localStorage.getItem(key); } catch { return null; }
   },
   async set(key, value) {
+    // 기기 저장소부터 동기로 쓴다. 앱이 닫히는 순간(pagehide)에도 이 줄은 반드시 끝난다 —
+    // 토스를 먼저 await하면 그 사이에 페이지가 죽어 백업까지 통째로 날아간다.
     let saved = false;
+    try { localStorage.setItem(key, value); saved = true; } catch { /* 아래에서 토스에 건다 */ }
     if (sdk?.Storage?.setItem) {
       try { await sdk.Storage.setItem(key, value); saved = true; } catch { /* 아래로 */ }
     }
-    // 토스에 썼더라도 기기에도 남겨 둔다. SDK가 흔들려도 마지막 판이 안 날아간다.
-    try { localStorage.setItem(key, value); } catch { if (!saved) throw new Error('저장 실패'); }
+    if (!saved) throw new Error('저장 실패');
   },
   async remove(key) {
     if (sdk?.Storage?.removeItem) {

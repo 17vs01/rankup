@@ -63,7 +63,7 @@ export const schulteGame = {
       round++;
       if (round > ROUNDS) return end();
       next = 1;
-      roundStart = performance.now();
+      roundStart = ctx.now();
       $round.textContent = `${round} / ${ROUNDS}라운드 · ${n}×${n}`;
       $next.textContent = '1';
       $grid.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
@@ -95,7 +95,7 @@ export const schulteGame = {
       $next.textContent = next <= total ? next : '✓';
       sfx.tick();
       if (next > total) {
-        const sec = (performance.now() - roundStart) / 1000;
+        const sec = (ctx.now() - roundStart) / 1000;
         times.push(sec);
         sfx.good();
         judge(ctx.body, true, `${sec.toFixed(1)}초`);

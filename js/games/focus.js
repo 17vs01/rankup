@@ -165,7 +165,7 @@ export const focusGame = {
         $pad.innerHTML = '<span>기다려…</span>';
         timeoutId = ctx.delay(() => {
           state = 'go';
-          goAt = performance.now();
+          goAt = ctx.now();
           $pad.className = 'reaction-pad go';
           $pad.innerHTML = '<span>탭!!</span>';
         }, ri(1000, 2600));
@@ -185,7 +185,7 @@ export const focusGame = {
           return;
         }
         if (state === 'go') {
-          const ms = Math.round(performance.now() - goAt);
+          const ms = Math.round(ctx.now() - goAt);
           times.push(ms);
           sfx.good();
           state = 'result';

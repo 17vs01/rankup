@@ -95,7 +95,7 @@ export const chronoGame = {
 
     function start() {
       phase = 'running';
-      startAt = performance.now();
+      startAt = ctx.now();
       $target.textContent = '';
       $hint.textContent = '';
       $pad.className = 'ch-pad running';
@@ -106,7 +106,7 @@ export const chronoGame = {
         $fake.classList.remove('hidden');
         const tick = () => {
           if (phase !== 'running') return;
-          const p = Math.min(1, (performance.now() - startAt) / (target * 1000) * speed);
+          const p = Math.min(1, (ctx.now() - startAt) / (target * 1000) * speed);
           $fakeFill.style.width = (p * 100) + '%';
           rafId = requestAnimationFrame(tick);
         };
@@ -117,7 +117,7 @@ export const chronoGame = {
     function stop() {
       phase = 'result';
       if (rafId) cancelAnimationFrame(rafId);
-      const actual = (performance.now() - startAt) / 1000;
+      const actual = (ctx.now() - startAt) / 1000;
       const relErr = Math.abs(actual - target) / target;
       const pts = Math.max(0, Math.round(100 * (1 - relErr / tol)));
       total += pts;

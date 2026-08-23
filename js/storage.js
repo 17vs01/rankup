@@ -15,7 +15,7 @@ let raw = null;        // 마지막으로 확정된 JSON 문자열 (아직 안 �
 let dirty = false;     // 아직 저장소에 못 밀어낸 변경이 있는가
 let flushTimer = null;
 
-/** 시작할 때 한 번. 토스 Storage → 기기 저장소 순으로 찾고, 필요하면 이관한다. */
+/** 시작할 때 한 번. 토스 Storage → 기기 저장소 순으로 찾는다 (platform.storage). */
 export async function initStorage() {
   let found = null;
   try { found = await storage.get(KEY); } catch { found = null; }
@@ -115,6 +115,9 @@ function freshState() {
     // 스도쿠 별관 진행. 랭크와 완전히 분리된 자체 해금·기록.
     sudokuProg: { unlocked: 1, recs: {}, plays: 0, clears: 0 },
     theme: 'onyx',      // 화면 테마
+    sound: 1,           // 소리 (토스 심사 항목 — 사용자가 끌 수 있어야 한다)
+    haptic: 1,          // 진동
+    userKey: '',        // 토스 사용자 식별키 (getUserKeyForGame). 토스 밖에서는 빈 값
     seenRules: {},      // gameId -> 1, 방법 화면을 본 종목
     modes: {},          // gameId -> 마지막으로 고른 모드 id
     totalSessions: 0,
@@ -253,6 +256,10 @@ export function loadState() {
   if (!s.korvocab) s.korvocab = {};
   if (s.sudoku === undefined) s.sudoku = null;
   if (!s.theme) s.theme = 'onyx';
+  // 소리·진동은 "없으면 켬"이 기본. 0으로 저장된 값은 그대로 지킨다.
+  s.sound = s.sound === 0 ? 0 : 1;
+  s.haptic = s.haptic === 0 ? 0 : 1;
+  if (typeof s.userKey !== 'string') s.userKey = '';
   if (!s.seenRules) s.seenRules = {};
   if (!s.modes) s.modes = {};
   // 함정 퀴즈가 가족별로 몇 번 냈는지 (덜 본 문제부터 내려고)

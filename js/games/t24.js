@@ -140,7 +140,7 @@ export const t24Game = {
     let revealed = false;          // 정답을 보여준 상태 (확인 대기)
     let finished = false;
     const history = [];            // 되돌리기용 타일 스냅샷
-    let levelStart = 0, tickId = null;
+    let levelStart = 0, tick_ = null;
 
     ctx.body.innerHTML = `
       <div class="t24-round" id="t24-round"></div>
@@ -198,13 +198,13 @@ export const t24Game = {
     // ---------- 타임어택 시계 ----------
     function startLevelClock() {
       if (!attack) return;
-      levelStart = performance.now();
-      if (tickId) clearInterval(tickId);
+      levelStart = ctx.now();
+      if (tick_) { tick_.stop(); tick_ = null; }
       const limit = limitFor(level);
       const tick = () => {
-        const left = limit - (performance.now() - levelStart) / 1000;
+        const left = limit - (ctx.now() - levelStart) / 1000;
         if (left <= 0) {
-          clearInterval(tickId); tickId = null;
+          tick_.stop(); tick_ = null;
           ctx.setTimerText('0s');
           return end('time');
         }
@@ -213,7 +213,7 @@ export const t24Game = {
         if ($t) $t.classList.toggle('urgent', left <= 10);
       };
       tick();
-      tickId = ctx.trackInterval(setInterval(tick, 250));
+      tick_ = ctx.interval(tick, 250);
     }
 
     function render() {
@@ -250,7 +250,7 @@ export const t24Game = {
       sol = p.sol;
       selIdx = -1; op = null; revealed = false;
       history.length = 0;
-      startAt = performance.now();
+      startAt = ctx.now();
       $reveal.classList.add('hidden');
       $next.classList.add('hidden');
       $actions.classList.remove('hidden');
@@ -295,7 +295,7 @@ export const t24Game = {
         const ok = tiles[0].d === 1 && tiles[0].n === target;
         if (ok) {
           solved++; levelSolved++;
-          const took = (performance.now() - startAt) / 1000;
+          const took = (ctx.now() - startAt) / 1000;
           totalSec += took;
           solveTimes.push(took);
           sfx.good();
@@ -373,7 +373,7 @@ export const t24Game = {
     function end(reason) {
       if (finished) return;
       finished = true;
-      if (tickId) { clearInterval(tickId); tickId = null; }
+      if (tick_) { tick_.stop(); tick_ = null; }
 
       if (attack) {
         // 타임어택은 실패로만 끝난다 (시간 초과·못 푼 문제). 진행 중이던 단계는 통과하지 못한 것.

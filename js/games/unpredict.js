@@ -68,7 +68,7 @@ export const unpredictGame = {
 
     let trial = 0, aiHits = 0, streakEvade = 0, bestEvade = 0;
     let pending = null;      // 이번 판 AI 예측
-    let lastTapAt = performance.now();
+    let lastTapAt = ctx.now();
     let locked = false;
 
     ctx.body.innerHTML = `
@@ -99,7 +99,7 @@ export const unpredictGame = {
     function tap(move) {
       if (locked || trial >= TRIALS) return;
       locked = true;
-      const now = performance.now();
+      const now = ctx.now();
       const dt = now - lastTapAt;
       lastTapAt = now;
 

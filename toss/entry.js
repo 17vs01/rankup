@@ -4,12 +4,13 @@
 // 그 구조를 깨지 않으려고, SDK를 여기서 한 번만 불러와 전역에 꽂아준다.
 // js/platform.js는 그 전역만 보므로 본체 코드는 한 줄도 토스를 모른다.
 import {
-  Game, Storage, graniteEvent, getUserKeyForGame, generateHapticFeedback,
+  Game, Storage, Screen, graniteEvent, getUserKeyForGame, generateHapticFeedback,
 } from '@apps-in-toss/web-framework';
 
 window.__APPS_IN_TOSS__ = {
   Game,                    // openLeaderboard · setLeaderboardScore · getUserProfile
   Storage,                 // getItem · setItem · removeItem · clearItems (비동기)
+  Screen,                  // setOrientation · setIosSwipeBack
   graniteEvent,            // 시스템 뒤로가기 구독
   getUserKeyForGame,
   generateHapticFeedback,  // iOS WebView는 navigator.vibrate가 안 먹는다

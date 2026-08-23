@@ -3,14 +3,14 @@ import {
   initStorage, flushState, clearState,
 } from './storage.js';
 import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.js';
-import { sfx } from './audio.js';
+import { sfx, setAudio, suspendAudio, resumeAudio } from './audio.js';
 import { exportState, readBackup, fmtDate } from './backup.js';
 import { RULES } from './rules.js';
 import { seededRandom, seedFor, dailyChallengeId } from './daily.js';
 import { titleOf, bestTitle, nextTitleTier } from './titles.js';
 import {
   initPlatform, inToss, getNickname, setLocalNickname, canEditNickname,
-  submitScore, openLeaderboard, hasLeaderboard, onBack,
+  submitScore, openLeaderboard, hasLeaderboard, onBack, getUserKey, lockScreen,
 } from './platform.js';
 import { mathGame } from './games/math.js';
 import { lexiGame } from './games/lexi.js';
@@ -48,8 +48,11 @@ const GAMES = GROUPS.flatMap(g => g.games);
 const $ = sel => document.querySelector(sel);
 
 let state = loadState();   // 저장소를 읽기 전이라 기본값. boot()에서 다시 채운다
-let activeTimers = [];    // 세션 중 타이머 (중단 시 정리)
+let activeTimers = [];    // 세션 중 타이머 레코드 (중단 시 정리, 일시정지 때 얼린다)
 let sessionTimer = null;  // 카운트다운 인터벌
+let sessionTimerRestart = null;   // 일시정지에서 돌아올 때 카운트다운을 다시 거는 함수
+let pausedAt = 0;         // 판이 멈춘 시각 (0이면 안 멈춤)
+let pausedTotal = 0;      // 이번 판에서 멈춰 있던 총 시간
 let currentGame = null;
 let sessionActive = false;
 let sessionToken = 0;
@@ -421,10 +424,84 @@ function grantFreezeIfDue() {
 
 // ---------- 세션 ----------
 function clearSession() {
-  activeTimers.forEach(id => { clearTimeout(id); clearInterval(id); });
+  activeTimers.forEach(t => { clearTimeout(t.id); clearInterval(t.id); });
   activeTimers = [];
   if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+  sessionTimerRestart = null;
   sessionActive = false;
+  pausedAt = 0;
+  pausedTotal = 0;
+  hidePause();
+}
+
+// ---------- 일시정지 ----------
+// 토스 게임 심사 항목: "백그라운드 전환 시 즉시 일시 정지". 그냥 요구사항이라서가
+// 아니라, 알림 하나 확인하고 온 사이에 60초가 다 타버리면 기록이 거짓말이 된다.
+//
+// 판 안의 시간은 전부 ctx.now()에서 나온다. 멈춘 동안 그 시계를 세워두고,
+// 걸려 있던 타이머는 남은 시간만큼 다시 건다. 게임 코드는 멈춘 줄도 모른다.
+function gameNow() {
+  return (pausedAt || performance.now()) - pausedTotal;
+}
+
+// 할 일이 끝난 타이머를 명부에서 뺀다 (일시정지가 되살리지 않도록)
+function retireTimer(rec) {
+  rec.dead = true;
+  const i = activeTimers.indexOf(rec);
+  if (i >= 0) activeTimers.splice(i, 1);
+}
+
+function pauseSession() {
+  if (!sessionActive || pausedAt) return;
+  pausedAt = performance.now();
+  // 걸려 있던 타이머를 얼린다 — 남은 시간을 기억해 두고 실제 타이머는 끊는다
+  for (const t of activeTimers) {
+    if (t.dead) continue;
+    if (t.kind === 'interval') { clearInterval(t.id); }
+    else { clearTimeout(t.id); t.remain = Math.max(0, t.dueAt - gameNow()); }
+    t.id = null;
+  }
+  if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+  suspendAudio();
+  showPause();
+}
+
+function resumeSession() {
+  if (!pausedAt) return;
+  pausedTotal += performance.now() - pausedAt;
+  pausedAt = 0;
+  for (const t of activeTimers) {
+    if (t.dead) continue;
+    if (t.kind === 'interval') t.id = setInterval(t.fn, t.ms);
+    else t.id = setTimeout(t.fn, t.remain);
+  }
+  if (sessionTimerRestart) sessionTimerRestart();
+  resumeAudio();
+}
+
+// 돌아오자마자 판이 굴러가면 손 놓고 있던 사이에 한 문제를 날린다. 3초 세고 재개한다.
+function showPause() {
+  const $p = $('#pause');
+  $('#pause-count').textContent = '';
+  $('#btn-pause-resume').classList.remove('hidden');
+  $p.classList.remove('hidden');
+}
+
+function hidePause() { $('#pause').classList.add('hidden'); }
+
+function countdownResume() {
+  $('#btn-pause-resume').classList.add('hidden');
+  const $c = $('#pause-count');
+  let n = 3;
+  $c.textContent = n;
+  // 판의 시계는 아직 멈춰 있으므로 이 카운트다운만은 생 setTimeout으로 센다
+  const step = () => {
+    n--;
+    if (n > 0) { $c.textContent = n; setTimeout(step, 700); return; }
+    hidePause();
+    resumeSession();
+  };
+  setTimeout(step, 700);
 }
 
 function makeCtx(game) {
@@ -451,26 +528,46 @@ function makeCtx(game) {
     // 스도쿠처럼 긴 판은 중단해도 진행이 남아야 한다.
     // 게임이 여기에 함수를 넣으면 ✕(중단) 직전에 호출된다.
     onAbort: null,
+    // 판의 시계. performance.now() 대신 이걸 쓰면 일시정지 동안 시간이 안 흐른다.
+    now: gameNow,
     delay(fn, ms) {
-      const id = setTimeout(fn, ms);
-      activeTimers.push(id);
-      return id;
+      const rec = { kind: 'timeout', ms, remain: ms, dueAt: gameNow() + ms, id: null };
+      // 터진 타이머는 스스로 명부에서 빠진다. 남겨 두면 일시정지가 "남은 시간 0"으로
+      // 보고 재개할 때 콜백을 한 번 더 부른다.
+      rec.fn = () => { retireTimer(rec); fn(); };
+      rec.id = setTimeout(rec.fn, ms);
+      activeTimers.push(rec);
+      return rec.id;
     },
-    // 게임이 직접 만든 setInterval을 세션 종료 시 같이 정리하도록 맡긴다
-    trackInterval(id) { activeTimers.push(id); return id; },
+    // 반복 타이머. 일시정지 때 같이 멈췄다가 돌아온다.
+    // 재개하면 실제 id가 바뀌므로 clearInterval(id)로는 못 끊는다 —
+    // 그래서 id 대신 stop()을 쥐여준다.
+    interval(fn, ms) {
+      const rec = { kind: 'interval', fn, ms, id: null };
+      rec.id = setInterval(fn, ms);
+      activeTimers.push(rec);
+      return {
+        stop() {
+          if (rec.id) clearInterval(rec.id);
+          rec.id = null;
+          retireTimer(rec);
+        },
+      };
+    },
     // 흐르는 시간(카운트업). 제한시간이 없는 종목용.
     stopwatch(onTick) {
       if (sessionTimer) clearInterval(sessionTimer);
-      const t0 = performance.now();
+      const t0 = gameNow();
       const render = () => {
-        const s = Math.floor((performance.now() - t0) / 1000);
+        const s = Math.floor((gameNow() - t0) / 1000);
         $('#game-timer').textContent =
           `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
         if (onTick) onTick(s);
       };
       render();
       sessionTimer = setInterval(render, 1000);
-      return () => Math.floor((performance.now() - t0) / 1000);
+      sessionTimerRestart = () => { sessionTimer = setInterval(render, 1000); };
+      return () => Math.floor((gameNow() - t0) / 1000);
     },
     timer(seconds, onEnd) {
       if (sessionTimer) clearInterval(sessionTimer);
@@ -481,7 +578,7 @@ function makeCtx(game) {
         $t.classList.toggle('urgent', remain <= 10);
       };
       render();
-      sessionTimer = setInterval(() => {
+      const tick = () => {
         remain--;
         render();
         if (remain <= 5 && remain > 0) sfx.tick();
@@ -490,7 +587,9 @@ function makeCtx(game) {
           sessionTimer = null;
           onEnd();
         }
-      }, 1000);
+      };
+      sessionTimer = setInterval(tick, 1000);
+      sessionTimerRestart = () => { sessionTimer = setInterval(tick, 1000); };
     },
     finish(result) {
       if (finished || token !== sessionToken) return;
@@ -520,21 +619,25 @@ function launch(game, quick, prepare) {
   $body.innerHTML = `<div class="countdown">${n}</div>`
     + (!quick && rule ? `<div class="countdown-summary">${rule.summary}</div>` : '');
   sfx.tick();
-  const cd = setInterval(() => {
+  // 카운트다운도 일시정지를 따른다. 자기 id를 레코드에서 읽어야 재개 뒤에도 자신을 끊을 수 있다.
+  const cdRec = { kind: 'interval', ms: quick ? 600 : 800, id: null };
+  cdRec.fn = () => {
     n--;
     if (n > 0) {
       $body.querySelector('.countdown').textContent = n;
       sfx.tick();
     } else {
-      clearInterval(cd);
+      clearInterval(cdRec.id);
+      retireTimer(cdRec);
       sfx.start();
       $body.innerHTML = '';
       currentCtx = makeCtx(game);
       if (prepare) prepare(currentCtx);
       game.run(currentCtx);
     }
-  }, quick ? 600 : 800);
-  activeTimers.push(cd);
+  };
+  cdRec.id = setInterval(cdRec.fn, cdRec.ms);
+  activeTimers.push(cdRec);
 }
 
 // ---------- 게임 방법 ----------
@@ -1022,6 +1125,16 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), 1800);
 }
 
+// ---------- 토스 사용자 식별키 ----------
+// 토스는 미니앱마다 다른 hash를 준다. 서버가 없어서 지금 쓸 데는 없지만,
+// 같은 기기를 다른 토스 계정이 쓰면 알아볼 수 있어야 해서 한 벌 남겨 둔다.
+async function rememberUserKey() {
+  try {
+    const key = await getUserKey();
+    if (key && key !== state.userKey) { state.userKey = key; saveState(state); }
+  } catch { /* 토스 밖이거나 SDK가 늦으면 그냥 넘어간다 */ }
+}
+
 // ---------- 기록 보기 ----------
 let nickname = null;
 async function refreshNickname() {
@@ -1193,6 +1306,19 @@ function applyTheme(name) {
     b.classList.toggle('on', b.dataset.theme === t));
 }
 
+// 소리·진동은 사용자가 끌 수 있어야 한다 (토스 게임 심사 항목)
+$('#sw-sound').addEventListener('change', e => {
+  state.sound = e.target.checked ? 1 : 0;
+  saveState(state);
+  setAudio({ sound: state.sound });
+  if (state.sound) sfx.tick();   // 켠 순간 소리로 확인시켜 준다
+});
+$('#sw-haptic').addEventListener('change', e => {
+  state.haptic = e.target.checked ? 1 : 0;
+  saveState(state);
+  setAudio({ haptic: state.haptic });
+});
+
 $('#themes').addEventListener('click', e => {
   const b = e.target.closest('.theme');
   if (!b) return;
@@ -1211,6 +1337,8 @@ function fmtWhen(ms) {
 }
 
 function renderSettings() {
+  $('#sw-sound').checked = state.sound !== 0;
+  $('#sw-haptic').checked = state.haptic !== 0;
   // 별명: 토스 밖에서만 직접 정할 수 있다
   const $nick = $('#nick-sect');
   if (canEditNickname()) {
@@ -1382,11 +1510,14 @@ async function boot() {
   state = loadState();
 
   applyTheme(state.theme);
+  setAudio({ sound: state.sound, haptic: state.haptic });
   if (!state.onboarded && state.totalSessions === 0) showIntro();
   else renderHome();
 
   onBack(handleBack);
+  lockScreen();       // 토스에서 세로 고정 + iOS 스와이프 뒤로가기 차단
   refreshNickname();
+  rememberUserKey();
   renderWeekLine();   // 순위 버튼 문구는 SDK가 붙은 뒤에야 정해진다
 }
 
@@ -1394,8 +1525,14 @@ function reveal() { document.documentElement.classList.remove('booting'); }
 
 // 앱이 가려지거나 닫히기 직전에 밀린 기록을 강제로 내보낸다.
 // 뒤로 미뤄 쓰기라 이게 없으면 마지막 판이 날아갈 수 있다.
-document.addEventListener('visibilitychange', () => { if (document.hidden) flushState(); });
+// 백그라운드로 가면 밀린 기록을 밀어내고, 판이 돌고 있으면 즉시 멈춘다.
+// (토스 게임 심사 항목이자, 알림 하나 보고 온 사이 60초가 타버리는 걸 막는 장치)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { flushState(); pauseSession(); }
+});
 window.addEventListener('pagehide', () => flushState());
+$('#btn-pause-resume').addEventListener('click', countdownResume);
+$('#btn-pause-quit').addEventListener('click', () => { hidePause(); abortGame(); });
 
 // 부팅이 어디서 실패해도 화면은 반드시 보여준다
 boot().catch(() => { state = loadState(); renderHome(); }).finally(reveal);

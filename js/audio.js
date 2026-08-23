@@ -1,7 +1,33 @@
 // 미니 사운드 + 진동 피드백
+//
+// 소리와 진동은 사용자가 끌 수 있어야 한다 (토스 게임 심사 항목). 설정 화면이
+// setAudio()로 상태를 넘겨주고, 여기서는 그 스위치만 본다.
+// 앱이 백그라운드로 가면 suspendAudio()로 오디오를 즉시 재운다.
 import { haptic } from './platform.js';
 
 let ctx = null;
+let soundOn = true;
+let hapticOn = true;
+let asleep = false;   // 백그라운드라 재워 둔 상태
+
+export function setAudio({ sound, haptic: hap }) {
+  if (sound !== undefined) soundOn = !!sound;
+  if (hap !== undefined) hapticOn = !!hap;
+  if (!soundOn && ctx) { try { ctx.suspend(); } catch { /* 무시 */ } }
+}
+
+/** 백그라운드 전환 — 소리를 즉시 멈춘다 */
+export function suspendAudio() {
+  asleep = true;
+  if (ctx) { try { ctx.suspend(); } catch { /* 무시 */ } }
+}
+
+/** 다시 앞으로 나왔을 때 */
+export function resumeAudio() {
+  asleep = false;
+  if (ctx && soundOn) { try { ctx.resume(); } catch { /* 무시 */ } }
+}
+
 function ac() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === 'suspended') ctx.resume();
@@ -9,6 +35,7 @@ function ac() {
 }
 
 function beep(freq, dur = 0.08, type = 'sine', gain = 0.12) {
+  if (!soundOn || asleep) return;
   try {
     const a = ac();
     const o = a.createOscillator();
@@ -24,7 +51,7 @@ function beep(freq, dur = 0.08, type = 'sine', gain = 0.12) {
 }
 
 // 진동은 플랫폼에 맡긴다 — 토스(iOS 포함)는 SDK 햅틱, 웹은 navigator.vibrate
-function vibrate(type) { haptic(type); }
+function vibrate(type) { if (hapticOn && !asleep) haptic(type); }
 
 export const sfx = {
   good() { beep(880, 0.07); vibrate('tickMedium'); },

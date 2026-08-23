@@ -128,6 +128,16 @@
       <div class="game-timer" id="game-timer"></div>
     </header>
     <div class="game-body" id="game-body"></div>
+    <!-- 백그라운드로 나갔다 오면 여기서 판을 잡아둔다 (토스 게임 심사 항목) -->
+    <div class="pause hidden" id="pause">
+      <div class="pause-box">
+        <div class="pause-title">잠깐 멈췄어요</div>
+        <p class="pause-desc">앱을 벗어나서 판을 세워 뒀습니다. 시간은 그대로예요.</p>
+        <div class="pause-count" id="pause-count"></div>
+        <button class="btn-primary" id="btn-pause-resume">이어서 하기</button>
+        <button class="btn-line" id="btn-pause-quit">그만두기</button>
+      </div>
+    </div>
   </section>
 
   <!-- 결과 -->
@@ -225,6 +235,18 @@
             <span class="theme-desc">밝은 아이보리</span>
           </button>
         </div>
+      </div>
+
+      <div class="sect">
+        <div class="sect-head">소리와 진동</div>
+        <label class="switch-row">
+          <span class="switch-name">소리</span>
+          <input type="checkbox" id="sw-sound" class="switch" checked>
+        </label>
+        <label class="switch-row">
+          <span class="switch-name">진동</span>
+          <input type="checkbox" id="sw-haptic" class="switch" checked>
+        </label>
       </div>
 
       <div class="sect hidden" id="nick-sect">

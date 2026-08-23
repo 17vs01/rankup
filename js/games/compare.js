@@ -62,7 +62,7 @@ export const compareGame = {
     const limitMs = Math.max(1500, 4000 - L * 200);
 
     let correct = 0, wrong = 0, timeout = 0, streak = 0, bestStreak = 0;
-    let cur = null, locked = true, barId = null, shownAt = 0;
+    let cur = null, locked = true, bar = null, shownAt = 0;
 
     ctx.body.innerHTML = `
       <div class="score-line" id="cm-score">정답 <b>0</b> · 오답 0</div>
@@ -95,26 +95,26 @@ export const compareGame = {
       $right.className = 'cm-side';
       $hint.textContent = '';
       locked = false;
-      shownAt = performance.now();
+      shownAt = ctx.now();
 
       // 남은 시간 막대. 다 차면 시간 초과.
-      if (barId) clearInterval(barId);
+      if (bar) { bar.stop(); bar = null; }
       $bar.style.width = '100%';
-      barId = ctx.trackInterval(setInterval(() => {
-        const left = 1 - (performance.now() - shownAt) / limitMs;
+      bar = ctx.interval(() => {
+        const left = 1 - (ctx.now() - shownAt) / limitMs;
         if (left <= 0) {
-          clearInterval(barId); barId = null;
+          bar.stop(); bar = null;
           if (!locked) judgeAnswer(null);
           return;
         }
         $bar.style.width = (left * 100) + '%';
-      }, 50));
+      }, 50);
     }
 
     function judgeAnswer(sideEl) {
       if (locked) return;
       locked = true;
-      if (barId) { clearInterval(barId); barId = null; }
+      if (bar) { bar.stop(); bar = null; }
       const leftBigger = cur.left.v > cur.right.v;
       const rightEl = leftBigger ? $left : $right;
 
@@ -143,7 +143,7 @@ export const compareGame = {
 
     next();
     ctx.timer(DURATION, () => {
-      if (barId) { clearInterval(barId); barId = null; }
+      if (bar) { bar.stop(); bar = null; }
       locked = true;
       const perf = (correct - (wrong + timeout) * 0.5) / EXPECTED;
       ctx.finish({

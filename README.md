@@ -307,7 +307,7 @@ js/
   feedback.js           판정 플래시 (◯ / ✕)
   rating.js             티어·LP 계산, 부식 공식
   storage.js            localStorage 저장, 스트릭, 세션 기록
-  audio.js              사운드 + 진동 피드백
+  audio.js              사운드 + 진동 피드백 (설정에서 끌 수 있다)
   backup.js             기록 내보내기·가져오기 (형식 검증 포함)
   sudoku-core.js        스도쿠 생성기·솔버 (유일해 보장, 1~3ms/판)
   data/vocab.js         어휘 600+ (티어 0~3)
@@ -346,6 +346,9 @@ export const myGame = {
     // ctx.delay()   세션 종료 시 자동 정리되는 setTimeout
     // ctx.timer(초, 콜백)   상단 카운트다운
     // ctx.stopwatch()       흐르는 시간 (제한 없는 종목용). 경과초를 읽는 함수를 반환
+    // ctx.now()             판의 시계(ms). 일시정지 동안 멈춘다 —
+    //                       performance.now()를 직접 부르면 일시정지를 우회한다
+    // ctx.interval(fn, ms)  반복 타이머. 돌려주는 손잡이의 stop()으로 끊는다
     // ctx.persist()         state 저장 (스도쿠 이어하기 등)
     // ctx.onAbort = fn      ✕ 누르기 직전 호출 — 진행 상황 저장에 쓴다
     // ctx.setTitle(문자열)
