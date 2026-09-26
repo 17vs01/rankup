@@ -247,7 +247,11 @@ html.booting #app { visibility: hidden; }
   transition: background .12s, opacity .2s;
 }
 .daily-item:active { background: var(--surface-2); }
-.daily-item.done { opacity: .5; }
+/* 완료한 항목은 "끝났다"만 알리면 된다. 카드 전체를 반투명으로 하면 어두운 테마에서
+   이름까지 배경에 묻혀 읽히지 않는다 — 글자는 명암비를 지키는 색으로만 낮춘다. */
+.daily-item.done .di-name { color: var(--text-dim); font-weight: 500; }
+.daily-item.done .di-icon { opacity: .55; }
+.daily-item.done .di-why { color: var(--good); }
 .di-check {
   width: 20px; height: 20px; border-radius: 50%; flex: 0 0 auto;
   border: 1.5px solid var(--line-2); display: flex; align-items: center; justify-content: center;
