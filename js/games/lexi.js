@@ -24,7 +24,7 @@ function mainTier(rating) {
 
 const SOURCES = [
   { id: 'kor', name: '우리말', desc: '순우리말·한자어·헷갈리는 말·관용구 — 예문으로 익힘' },
-  { id: 'eng', name: '영단어', desc: '기초 → 수능 → 토익 고득점 → GRE급' },
+  { id: 'eng', name: '영단어', desc: '기초 → 수능 → 실무·고급 → 최상급' },
 ];
 
 function readSel(state) {
@@ -37,6 +37,19 @@ function readSel(state) {
 const LEXI_LABELS = { kor: '우리말만', eng: '영단어만', 'kor+eng': '통합' };
 function keyOf(sel) {
   return SOURCES.map(s => s.id).filter(id => sel.includes(id)).join('+');
+}
+
+// 복습 기록은 단어로 찾는다. 예전에는 배열 번호로 저장해서, 데이터 중간에 단어를
+// 하나만 넣거나 빼도 뒤쪽 모든 단어의 복습 기록이 엉뚱한 단어에 붙었다.
+// 숫자 키로 남아 있는 옛 기록은 지금 배열 기준으로 단어 키로 옮긴다.
+// (단어는 숫자로만 된 것이 없으니 숫자 키면 옛 기록이다. 여러 번 불려도 안전하다)
+function migrateStore(store, list) {
+  for (const k of Object.keys(store)) {
+    if (!/^\d+$/.test(k)) continue;
+    const v = list[Number(k)];
+    if (v && !store[v.w]) store[v.w] = store[k];
+    delete store[k];
+  }
 }
 
 export const lexiGame = {
@@ -109,6 +122,8 @@ export const lexiGame = {
     const tier = mainTier(ctx.rating);
     const engStore = ctx.state.vocab || (ctx.state.vocab = {});
     const korStore = ctx.state.korvocab || (ctx.state.korvocab = {});
+    migrateStore(engStore, VOCAB);
+    migrateStore(korStore, KOR_VOCAB);
     const now = Date.now();
     const sel = readSel(ctx.state);
 
@@ -117,7 +132,7 @@ export const lexiGame = {
     function buildQueue(list, store) {
       const due = [], pool = [];
       list.forEach((v, i) => {
-        const st = store[i];
+        const st = store[v.w];
         if (st && st.due <= now && st.box < 3) due.push(i);
         const dt = v.t - tier;
         if (dt === 0 || (dt === -1 && Math.random() < 0.3) || (dt === 1 && Math.random() < 0.2)) pool.push(i);
@@ -125,20 +140,24 @@ export const lexiGame = {
       return shuffle(due).concat(shuffle(pool.length ? pool : list.map((_, i) => i)));
     }
 
-    function updateLeitner(store, idx, ok) {
-      const st = store[idx] || { box: 1, due: 0 };
+    function updateLeitner(store, word, ok) {
+      const st = store[word] || { box: 1, due: 0 };
       if (ok) { st.box = Math.min(5, st.box + 1); st.due = now + st.box * 24 * 3600 * 1000; }
       else { st.box = 0; st.due = now; }
-      store[idx] = st;
+      store[word] = st;
     }
 
-    // 영단어 오답 3개 — 뜻 텍스트가 정답·서로와 겹치지 않게
+    // 영단어 오답 3개 — 뜻이 정답·서로와 조금이라도 겹치면 안 된다.
+    // 문장이 같은지만 보면 "결정하다"(decide) 옆에 "결정하다, 알아내다"(determine)가
+    // 오답으로 나와 정답이 둘이 된다. 쉼표로 나뉜 뜻 조각 하나라도 겹치면 버린다.
+    const senses = m => m.split(/[,·;/]/).map(x => x.trim()).filter(Boolean);
     function engDistractors(word) {
-      const seen = new Set([word.m]);
+      const used = new Set(senses(word.m));
       const out = [];
       for (const v of shuffle(VOCAB.filter(v => Math.abs(v.t - word.t) <= 1))) {
-        if (seen.has(v.m)) continue;
-        seen.add(v.m);
+        const parts = senses(v.m);
+        if (parts.some(x => used.has(x))) continue;
+        parts.forEach(x => used.add(x));
         out.push(v.m);
         if (out.length === 3) break;
       }
@@ -205,7 +224,7 @@ export const lexiGame = {
         if (locked) return;
         locked = true;
         const ok = m === cur.answer;
-        updateLeitner(cur.src === 'kor' ? korStore : engStore, cur.idx, ok);
+        updateLeitner(cur.src === 'kor' ? korStore : engStore, cur.word, ok);
         if (ok) {
           correct++; streak++; sfx.combo(streak);
           comboTick(ctx.body, streak);

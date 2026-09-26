@@ -14,7 +14,8 @@ export const memoryGame = {
   run(ctx) {
     // 시작 칸수: 기록이 있으면 최고 기록 바로 아래에서, 없으면 레이팅 기준
     const d = ctx.state.disc.memory;
-    const bestCells = d.records && d.records.memory_cells;
+    // 오늘의 도전은 모두 같은 판이어야 하니 내 기록이 아니라 고정 레이팅에서 시작한다
+    const bestCells = ctx.daily ? null : (d.records && d.records.memory_cells);
     const k0 = bestCells
       ? Math.max(3, bestCells - 1)
       : Math.max(3, Math.round(4 + (ctx.rating - 800) / 150));

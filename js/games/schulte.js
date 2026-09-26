@@ -4,8 +4,13 @@
 import { sfx } from '../audio.js';
 import { judge } from '../feedback.js';
 
-// 한 라운드가 30~60초라 3라운드는 한 판이 너무 길어진다. 2라운드로 끊는다.
-const ROUNDS = 2;
+// 오늘의 도전이면 ctx.rng(날짜 시드 난수)가 들어온다. 문제를 만들 때는 반드시 R()을 쓴다 —
+// Math.random을 섞으면 같은 날 같은 종목이어도 사람마다 판이 갈린다.
+let R = Math.random;
+
+// 한 라운드가 30~90초다. 2라운드면 한 판이 최대 3분이라 "60초" 약속과 멀어서
+// 한 판 = 한 라운드로 줄였다.
+const ROUNDS = 1;
 
 // 레벨에 따라 격자가 커진다. 5×5가 고전적인 기본.
 // 시작 레이팅(1000)이 레벨 0. 25칸 → 36칸은 체감이 커서 천천히 올린다.
@@ -24,6 +29,7 @@ export const schulteGame = {
   icon: '🔎',
   desc: '흩어진 숫자를 순서대로 찾기',
   run(ctx) {
+    R = ctx.rng || Math.random;
     const n = sizeFor(ctx.rating);
     const total = n * n;
     const expect = EXPECT[n];
@@ -53,7 +59,7 @@ export const schulteGame = {
       const a = [];
       for (let i = 1; i <= total; i++) a.push(i);
       for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(R() * (i + 1));
         [a[i], a[j]] = [a[j], a[i]];
       }
       return a;
@@ -64,7 +70,7 @@ export const schulteGame = {
       if (round > ROUNDS) return end();
       next = 1;
       roundStart = ctx.now();
-      $round.textContent = `${round} / ${ROUNDS}라운드 · ${n}×${n}`;
+      $round.textContent = ROUNDS > 1 ? `${round} / ${ROUNDS}라운드 · ${n}×${n}` : `${n}×${n}`;
       $next.textContent = '1';
       $grid.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
       $grid.innerHTML = '';
@@ -99,7 +105,7 @@ export const schulteGame = {
         times.push(sec);
         sfx.good();
         judge(ctx.body, true, `${sec.toFixed(1)}초`);
-        $note.textContent = `${round}라운드 ${sec.toFixed(1)}초`;
+        $note.textContent = `${sec.toFixed(1)}초`;
         ctx.delay(startRound, 1100);
       }
     });

@@ -1,11 +1,14 @@
 // 스도쿠 (9×9 클래식) — 랭크 밖 별관
 // 실수 3회 제한, 메모, 되돌리기, 힌트 3회, 하이라이트. 중단해도 진행이 남는다.
+// 숫자를 넣으면 같은 줄·박스의 메모가 저절로 정리되고, 힌트는 왜 그 칸인지 말해준다.
+// 오늘의 스도쿠(ctx.sudokuDay)는 날짜 시드라 모두가 같은 판을 푼다.
 //
 // LP·부식·리그와 무관하다. 한 판이 5~20분이라 "60초 랭크전"의 경제와 맞지 않아
 // 따로 뺐다. 대신 난이도 해금과 난이도별 최단 기록이 자체 진행감을 만든다.
 // 난이도는 ctx.sudokuLevel(이름)로 받는다 — 고르는 건 별관 화면의 몫.
 import { SPEC9, generate, boxOf, conflicts, findSingles } from '../sudoku-core.js';
 import { sfx } from '../audio.js';
+import { seededRandom, seedFor } from '../daily.js';
 
 const N = 9;
 const MAX_MISTAKES = 3;
@@ -21,6 +24,12 @@ export const SUDOKU_LEVELS = [
   { name: '극한',   clues: 25, expect: 900 },
 ];
 
+// 오늘의 스도쿠 — 해금과 무관하게 누구나. 난이도는 "보통"과 같다.
+export const SUDOKU_DAILY = { name: '오늘의 스도쿠', clues: 36, expect: 420, daily: true };
+
+// 숫자 뒤 조사 (1이, 2가, 3이 …) — 숫자는 읽는 소리로 받침을 정한다
+const GA = ['', '이', '가', '이', '가', '가', '이', '이', '이', '가'];
+
 export const sudokuGame = {
   id: 'sudoku',
   annex: true,   // 랭크 밖. GAMES 배열에 넣지 않는다.
@@ -28,12 +37,15 @@ export const sudokuGame = {
   icon: '🔢',
   desc: '9×9 클래식 · 이어하기 지원',
   run(ctx) {
-    const level = SUDOKU_LEVELS.find(l => l.name === ctx.sudokuLevel) || SUDOKU_LEVELS[0];
+    const day = ctx.sudokuDay || null;   // 'YYYY-M-D'면 오늘의 스도쿠
+    const level = day ? SUDOKU_DAILY
+      : (SUDOKU_LEVELS.find(l => l.name === ctx.sudokuLevel) || SUDOKU_LEVELS[0]);
     const store = ctx.state.sudoku;
 
-    // 저장된 판이 같은 난이도면 이어서, 아니면 새 판
+    // 저장된 판이 같은 난이도(오늘의 스도쿠면 같은 날)면 이어서, 아니면 새 판
     let given, solution, grid, notes, mistakes, hintsLeft, elapsedBefore;
-    if (store && store.level === level.name && store.grid && !store.done) {
+    if (store && store.level === level.name && store.grid && !store.done
+      && (!day || store.day === day)) {
       given = Int8Array.from(store.given);
       solution = Int8Array.from(store.solution);
       grid = Int8Array.from(store.grid);
@@ -42,7 +54,8 @@ export const sudokuGame = {
       hintsLeft = store.hints;
       elapsedBefore = store.elapsed || 0;
     } else {
-      const g = generate(SPEC9, level.clues);
+      const g = generate(SPEC9, level.clues,
+        day ? seededRandom(seedFor(day, 'sudoku')) : Math.random);
       given = Int8Array.from(g.puzzle);
       solution = g.solution;
       grid = Int8Array.from(g.puzzle);
@@ -67,6 +80,7 @@ export const sudokuGame = {
         <button class="sd-tool" id="sd-note"><span>✎</span><small>메모</small><i class="sd-badge" id="sd-note-badge">OFF</i></button>
         <button class="sd-tool" id="sd-hint"><span>💡</span><small>힌트</small><i class="sd-badge on" id="sd-hint-badge">${hintsLeft}</i></button>
       </div>
+      <div class="sd-msg" id="sd-msg"></div>
       <div class="sd-pad" id="sd-pad"></div>
     `;
 
@@ -76,6 +90,14 @@ export const sudokuGame = {
     const $left = ctx.body.querySelector('#sd-left');
     const $noteBadge = ctx.body.querySelector('#sd-note-badge');
     const $hintBadge = ctx.body.querySelector('#sd-hint-badge');
+    const $msg = ctx.body.querySelector('#sd-msg');
+    let msgTimer = null;
+    function say(text, ms = 4200) {
+      $msg.textContent = text;
+      $msg.classList.add('on');
+      ctx.cancel(msgTimer);
+      msgTimer = ctx.delay(() => $msg.classList.remove('on'), ms);
+    }
 
     // ---------- 판 그리기 ----------
     const cells = [];
@@ -151,8 +173,50 @@ export const sudokuGame = {
         given: [...given], solution: [...solution], grid: [...grid],
         notes: notes.map(s => [...s]),
         mistakes, hints: hintsLeft, elapsed: elapsedBefore + readElapsed(), done,
+        day,
       };
       ctx.persist();
+    }
+
+    // ---------- 같은 줄·박스 ----------
+    const peersOf = idx => {
+      const r = (idx / N) | 0, c = idx % N, b = boxOf(SPEC9, r, c);
+      const out = [];
+      for (let i = 0; i < 81; i++) {
+        if (i === idx) continue;
+        const rr = (i / N) | 0, cc = i % N;
+        if (rr === r || cc === c || boxOf(SPEC9, rr, cc) === b) out.push(i);
+      }
+      return out;
+    };
+
+    // 맞는 숫자를 놓으면 같은 행·열·박스 메모에서 그 숫자를 지운다.
+    // 손으로 지우는 건 규칙 적용이 아니라 잡일이다. 되돌리기로 되살릴 수 있게 원래 메모를 돌려준다.
+    function clearPeerNotes(idx, v) {
+      const changed = [];
+      for (const i of peersOf(idx)) {
+        if (!notes[i].has(v)) continue;
+        changed.push({ i, prev: new Set(notes[i]) });
+        notes[i].delete(v);
+      }
+      return changed;
+    }
+
+    // 방금 채운 칸 때문에 행·열·박스가 완성됐으면 그 줄을 잠깐 반짝인다
+    function celebrateUnits(idx) {
+      const r = (idx / N) | 0, c = idx % N, b = boxOf(SPEC9, r, c);
+      const units = [[], [], []];
+      for (let i = 0; i < 81; i++) {
+        const rr = (i / N) | 0, cc = i % N;
+        if (rr === r) units[0].push(i);
+        if (cc === c) units[1].push(i);
+        if (boxOf(SPEC9, rr, cc) === b) units[2].push(i);
+      }
+      const lit = new Set();
+      for (const u of units) if (u.every(i => grid[i] === solution[i])) u.forEach(i => lit.add(i));
+      if (!lit.size) return;
+      for (const i of lit) cells[i].classList.add('pop');
+      ctx.delay(() => { for (const i of lit) cells[i].classList.remove('pop'); }, 450);
     }
 
     // ---------- 입력 ----------
@@ -173,7 +237,8 @@ export const sudokuGame = {
         render(); save();
         return;
       }
-      undoStack.push({ i: sel, prev: grid[sel], prevNotes: new Set(notes[sel]) });
+      const u = { i: sel, prev: grid[sel], prevNotes: new Set(notes[sel]), peers: [] };
+      undoStack.push(u);
       grid[sel] = v;
       notes[sel].clear();
 
@@ -189,8 +254,9 @@ export const sudokuGame = {
       }
 
       sfx.good();
-      // 같은 숫자를 다 채웠으면 잠깐 강조
+      u.peers = clearPeerNotes(sel, v);
       render(); save();
+      celebrateUnits(sel);
       if (isSolved()) return end(true);
     }
 
@@ -213,6 +279,7 @@ export const sudokuGame = {
       if (!u) return;
       grid[u.i] = u.prev;
       notes[u.i] = u.prevNotes;
+      for (const p of u.peers || []) notes[p.i] = p.prev;   // 자동으로 지운 메모도 되살린다
       sel = u.i;
       render(); save();
     });
@@ -244,20 +311,40 @@ export const sudokuGame = {
         const empty = [];
         for (let i = 0; i < 81; i++) if (!grid[i]) empty.push(i);
         if (!empty.length) return;
-        target = { idx: empty[Math.floor(Math.random() * empty.length)], val: 0 };
+        target = { idx: empty[Math.floor(Math.random() * empty.length)], val: 0, why: null };
         target.val = solution[target.idx];
       }
       hintsLeft--;
-      undoStack.push({ i: target.idx, prev: grid[target.idx], prevNotes: new Set(notes[target.idx]) });
+      const u = { i: target.idx, prev: grid[target.idx], prevNotes: new Set(notes[target.idx]), peers: [] };
+      undoStack.push(u);
       grid[target.idx] = target.val;
       notes[target.idx].clear();
+      u.peers = clearPeerNotes(target.idx, target.val);
       sel = target.idx;
       sfx.tick();
+      say(hintReason(target));
+      render(); save();
       cells[target.idx].classList.add('hinted');
       ctx.delay(() => cells[target.idx].classList.remove('hinted'), 900);
-      render(); save();
+      celebrateUnits(target.idx);
       if (isSolved()) end(true);
     });
+
+    // 힌트는 칸을 채우는 게 아니라 "어떻게 찾는지"를 가르쳐야 한다
+    function hintReason(t) {
+      const v = t.val, ga = GA[v];
+      if (!t.why) {
+        let wrong = false;
+        for (let i = 0; i < 81; i++) if (grid[i] && !given[i] && grid[i] !== solution[i]) wrong = true;
+        return wrong
+          ? '틀린 숫자가 남아 있어 논리로 짚을 칸이 없어요. 붉은 숫자부터 지워 보세요'
+          : '지금은 한 번에 확정되는 칸이 없어서 정답 하나를 열었어요';
+      }
+      if (t.why.kind === 'naked') return `같은 행·열·박스에 다른 숫자가 모두 있어서 ${v}${ga} 남는 칸이에요`;
+      const where = t.why.unit === 'row' ? `${t.why.no}행에서`
+        : t.why.unit === 'col' ? `${t.why.no}열에서` : '이 박스에서';
+      return `${where} ${v}${ga} 들어갈 수 있는 칸은 여기뿐이에요`;
+    }
 
     // ---------- 시간 / 종료 ----------
     let readElapsed = () => 0;
@@ -277,8 +364,10 @@ export const sudokuGame = {
         annex: true,
         solved,
         level: level.name,
+        day,
         sec,
         mistakes,
+        hints: MAX_HINTS - hintsLeft,
         expect: level.expect,
       });
     }

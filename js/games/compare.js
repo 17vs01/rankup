@@ -4,10 +4,14 @@
 import { sfx } from '../audio.js';
 import { comboTick } from '../feedback.js';
 
+// 오늘의 도전이면 ctx.rng(날짜 시드 난수)가 들어온다. 문제를 만들 때는 반드시 R()을 쓴다 —
+// Math.random을 섞으면 같은 날 같은 종목이어도 사람마다 판이 갈린다.
+let R = Math.random;
+
 const DURATION = 60;
 const EXPECTED = 14;
 
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
 const pick = arr => arr[ri(0, arr.length - 1)];
 
 // 레벨에 따라 문제가 커지고, 두 값의 차이(여유)가 좁아진다
@@ -42,8 +46,8 @@ function genPair(L) {
 
   const left = make();
   // 오른쪽은 왼쪽 값 근처의 "그냥 숫자" — 계산 대 어림의 대결이 되게
-  const bigger = Math.random() < 0.5;
-  const ratio = 1 + margin * (0.6 + Math.random() * 0.8);
+  const bigger = R() < 0.5;
+  const ratio = 1 + margin * (0.6 + R() * 0.8);
   let rv = Math.round(bigger ? left.v / ratio : left.v * ratio);
   if (rv === left.v) rv += bigger ? -1 : 1;   // 같은 값은 안 낸다
   return { left, right: { text: String(rv), v: rv } };
@@ -55,6 +59,7 @@ export const compareGame = {
   icon: '⚖️',
   desc: '어느 쪽이 큰지 순간 판단',
   run(ctx) {
+    R = ctx.rng || Math.random;
     // 시작 레이팅(1000)이 레벨 0이 되게 잡는다. 800 기준으로 재면 첫 판부터
     // 두 자리 곱셈이 나와서 "순간 판단"이 아니라 그냥 어려운 암산이 된다.
     const L = Math.max(0, (ctx.rating - 1000) / 200);

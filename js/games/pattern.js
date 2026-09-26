@@ -4,10 +4,14 @@
 import { sfx } from '../audio.js';
 import { comboTick } from '../feedback.js';
 
+// 오늘의 도전이면 ctx.rng(날짜 시드 난수)가 들어온다. 문제를 만들 때는 반드시 R()을 쓴다 —
+// Math.random을 섞으면 같은 날 같은 종목이어도 사람마다 판이 갈린다.
+let R = Math.random;
+
 const DURATION = 60;
 const EXPECTED = 7;
 
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
 const pick = arr => arr[ri(0, arr.length - 1)];
 const shuffle = a => {
   const x = a.slice();
@@ -105,7 +109,7 @@ function distractors(p) {
     if (out.length === 3) break;
   }
   while (out.length < 3) {
-    const c = p.ans + ri(4, 9) * (Math.random() < 0.5 ? 1 : -1);
+    const c = p.ans + ri(4, 9) * (R() < 0.5 ? 1 : -1);
     if (c !== p.ans && c > 0 && !out.includes(c)) out.push(c);
   }
   return out;
@@ -117,6 +121,7 @@ export const patternGame = {
   icon: '🕵️',
   desc: '수열의 숨은 규칙 추론',
   run(ctx) {
+    R = ctx.rng || Math.random;
     const L = Math.max(0, (ctx.rating - 1000) / 200);
 
     let correct = 0, wrong = 0, streak = 0, bestStreak = 0;

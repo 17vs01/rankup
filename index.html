@@ -102,6 +102,12 @@
         <div class="sd-progress" id="sd-progress"></div>
       </div>
 
+      <button class="sd-daily" id="sd-daily">
+        <span class="sc-kicker">🗓 오늘의 스도쿠</span>
+        <span class="sc-desc" id="sd-daily-name">모두가 같은 판 · 보통 난이도</span>
+        <span class="sd-daily-sub" id="sd-daily-sub"></span>
+      </button>
+
       <button class="sd-continue hidden" id="sd-continue">
         <span class="sc-kicker">이어서 하기</span>
         <span class="sc-desc" id="sd-continue-desc"></span>
@@ -191,7 +197,7 @@
       <div class="intro-points">
         <div class="ip"><span class="ip-icon">🎯</span><span><b>오늘의 훈련 3판</b><br>뭘 할지 고민하지 마세요. 매일 골라 드립니다.</span></div>
         <div class="ip"><span class="ip-icon">📈</span><span><b>랭크가 남습니다</b><br>잘하면 오르고, 쉬면 줄어듭니다. 실력에 맞춰 문제도 어려워집니다.</span></div>
-        <div class="ip"><span class="ip-icon">🏆</span><span><b>매주 겨룹니다</b><br>이번 주에 딴 LP로 순위를 매기고 월요일에 리셋됩니다.</span></div>
+        <div class="ip"><span class="ip-icon">🏆</span><span><b>매주 겨룹니다</b><br>판마다 성적이 이번 주 점수로 쌓이고, 월요일에 리셋됩니다.</span></div>
       </div>
       <button class="btn-primary" id="btn-intro-start">첫 판 시작하기</button>
       <button class="btn-secondary" id="btn-intro-skip">둘러볼게요</button>
@@ -259,8 +265,9 @@
       </div>
 
       <div class="sect">
-        <div class="sect-head">기록 백업</div>
-        <p class="sect-desc">기록은 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 랭크가 사라지니 가끔 내보내 두세요.</p>
+        <div class="sect-head" id="backup-head">기록 백업</div>
+        <p class="sect-desc" id="backup-desc">기록은 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 랭크가 사라지니 가끔 내보내 두세요.</p>
+        <div id="backup-tools">
         <button class="btn-line" id="btn-export">파일로 내보내기</button>
         <button class="btn-line" id="btn-import">파일에서 가져오기</button>
         <input type="file" id="file-input" accept="application/json,.json" hidden>
@@ -273,6 +280,7 @@
             <button class="btn-line" id="btn-import-cancel">취소</button>
             <button class="btn-line danger" id="btn-import-apply">덮어쓰기</button>
           </div>
+        </div>
         </div>
       </div>
 

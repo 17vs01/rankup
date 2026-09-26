@@ -4,6 +4,10 @@
 import { sfx } from '../audio.js';
 import { comboTick } from '../feedback.js';
 
+// 오늘의 도전이면 ctx.rng(날짜 시드 난수)가 들어온다. 문제를 만들 때는 반드시 R()을 쓴다 —
+// Math.random을 섞으면 같은 날 같은 종목이어도 사람마다 판이 갈린다.
+let R = Math.random;
+
 const TRIALS = 60;
 const EXPECTED_MISS_RATE = 0.44; // 이 정도 피하면 본전. 완전 무작위(0.5)면 소폭 상승.
 
@@ -40,7 +44,7 @@ function makePredictor(maxOrder, useTiming) {
         s0 += w * conf * (c[0] / n);
         s1 += w * conf * (c[1] / n);
       }
-      if (Math.abs(s0 - s1) < 1e-9) return Math.random() < 0.5 ? 0 : 1;
+      if (Math.abs(s0 - s1) < 1e-9) return R() < 0.5 ? 0 : 1;
       return s0 > s1 ? 0 : 1;
     },
     record(move, fast) {
@@ -61,6 +65,7 @@ export const unpredictGame = {
   icon: '🎭',
   desc: 'AI가 내 다음 수를 맞힌다',
   run(ctx) {
+    R = ctx.rng || Math.random;
     const L = Math.max(0, (ctx.rating - 800) / 200);
     const maxOrder = Math.min(8, 2 + Math.floor(L));
     const useTiming = ctx.rating >= 1400;

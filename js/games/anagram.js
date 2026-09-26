@@ -5,11 +5,15 @@ import { KOR_VOCAB, KOR_CATS } from '../data/korvocab.js';
 import { sfx } from '../audio.js';
 import { judge } from '../feedback.js';
 
+// 오늘의 도전이면 ctx.rng(날짜 시드 난수)가 들어온다. 문제를 만들 때는 반드시 R()을 쓴다 —
+// Math.random을 섞으면 같은 날 같은 종목이어도 사람마다 판이 갈린다.
+let R = Math.random;
+
 const DURATION = 60;
 // 뜻을 읽고 단어를 "떠올린 뒤" 음절을 조립해야 해서 어휘력보다 한 문제가 길다
 const EXPECTED = 6;
 
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
 const shuffle = a => {
   const x = a.slice();
   for (let i = x.length - 1; i > 0; i--) { const j = ri(0, i); [x[i], x[j]] = [x[j], x[i]]; }
@@ -32,6 +36,7 @@ export const anagramGame = {
   icon: '🔤',
   desc: '뜻을 보고 음절 맞추기',
   run(ctx) {
+    R = ctx.rng || Math.random;
     const tier = mainTier(ctx.rating);
     // 레벨이 오르면 긴 단어 위주로
     const minLen = ctx.rating >= 1500 ? 3 : 2;
@@ -40,7 +45,7 @@ export const anagramGame = {
     KOR_VOCAB.forEach((v, i) => {
       if (!usable(v) || v.w.length < minLen) return;
       const dt = v.t - tier;
-      if (dt === 0 || (dt === -1 && Math.random() < 0.3) || (dt === 1 && Math.random() < 0.25)) pool.push(i);
+      if (dt === 0 || (dt === -1 && R() < 0.3) || (dt === 1 && R() < 0.25)) pool.push(i);
     });
     const queue = shuffle(pool.length ? pool : KOR_VOCAB.map((_, i) => i).filter(i => usable(KOR_VOCAB[i])));
     let qi = 0;

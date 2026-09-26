@@ -5,6 +5,10 @@ import { comboTick } from '../feedback.js';
 
 const DURATION = 60;
 const EXPECTED = 11;
+// 최상위 문제(레벨 7.5+)부터는 문제가 더 어려워지지 않는다. 기대치까지 멈추면
+// 천장에 닿은 사람은 판마다 LP가 오르기만 한다. 그 뒤로는 기대 정답 수를 올린다.
+const TOP_LEVEL = 7.5;
+const expectedFor = level => EXPECTED * (1 + 0.08 * Math.max(0, level - TOP_LEVEL));
 
 // 데일리 챌린지면 ctx.rng(시드 난수)가 들어온다. 평소엔 Math.random.
 let rnd = Math.random;
@@ -54,7 +58,7 @@ function genProblem(level) {
       () => { const b = ri(12, 19), c = ri(6, 15); return { q: `${b * c} ÷ ${b}`, a: c }; },
     ])();
   }
-  if (L < 7.5) {
+  if (L < TOP_LEVEL) {
     return pick([
       () => { const a = ri(1234, 8999), b = ri(234, 999); return { q: `${a} + ${b}`, a: a + b }; },
       () => { const a = ri(23, 59), b = ri(21, 49); return { q: `${a} × ${b}`, a: a * b }; },
@@ -63,7 +67,7 @@ function genProblem(level) {
       () => { const a = pick([12.5, 35, 45, 65, 85]), b = a === 12.5 ? ri(2, 12) * 40 : ri(4, 24) * 20; return { q: `${b}의 ${a}%`, a: b * a / 100 }; },
     ])();
   }
-  // L 7.5+ : 최상위
+  // L 7.5+ : 최상위 (여기서부터는 expectedFor가 기준을 올린다)
   return pick([
     () => { const a = ri(34, 99), b = ri(34, 99); return { q: `${a} × ${b}`, a: a * b }; },
     () => { const a = ri(4567, 9899), b = ri(1234, 4321); return { q: `${a} − ${b}`, a: a - b }; },
@@ -105,6 +109,7 @@ export const mathGame = {
 
     function next() {
       cur = genProblem(level);
+      cur.missed = false;
       input = '';
       $p.textContent = `${cur.q} = ?`;
       $a.innerHTML = '&nbsp;';
@@ -117,12 +122,24 @@ export const mathGame = {
 
     function tryAutoSubmit(forceJudge) {
       // 정답과 일치하면 즉시 통과 (제출 버튼 없이 속도감).
-      // 틀린 입력은 자동 오답 처리하지 않고 ⌫로 고칠 수 있게 둔다 —
-      // 자릿수를 넘겼거나 OK를 눌렀을 때만 오답 확정.
+      // 답과 자릿수가 같아졌는데 틀렸거나 OK를 눌렀으면 오답이다.
+      // 예전에는 자릿수를 "넘겨야" 오답이라, 두 자리 답을 ⌫로 지워 가며 벌점 없이
+      // 찍어볼 수 있었다. 지금은 한 번 틀리면 오답 1개를 세고 한 번 더 기회를 준다
+      // (오타 구제). 두 번째도 틀리면 정답을 보여주고 넘어간다.
       if (input === '') return;
       const val = parseFloat(input);
-      const over = input.length > String(cur.a).length;
-      if (!forceJudge && val !== cur.a && !over) return;
+      const full = input.length >= String(cur.a).length;
+      if (!forceJudge && val !== cur.a && !full) return;
+      if (val !== cur.a && !cur.missed) {
+        cur.missed = true;
+        wrong++; streak = 0; sfx.bad();
+        ctx.body.classList.remove('flash-good', 'flash-bad'); void ctx.body.offsetWidth;
+        ctx.body.classList.add('flash-bad');
+        updateScore();
+        input = '';
+        $a.textContent = '한 번 더';
+        return;
+      }
       if (val === cur.a) {
         correct++; streak++; sfx.combo(streak);
         comboTick(ctx.body, streak);
@@ -131,7 +148,7 @@ export const mathGame = {
         ctx.body.classList.add('flash-good');
         updateScore(); next();
       } else {
-        wrong++; streak = 0; sfx.bad();
+        streak = 0; sfx.bad();   // 오답은 첫 번째 틀렸을 때 이미 셌다
         ctx.body.classList.remove('flash-good', 'flash-bad'); void ctx.body.offsetWidth;
         ctx.body.classList.add('flash-bad');
         $p.textContent = `${cur.q} = ${cur.a}`;
@@ -158,7 +175,7 @@ export const mathGame = {
     next();
     ctx.timer(DURATION, () => {
       const score = correct;
-      const perf = (correct - wrong * 0.5) / EXPECTED;
+      const perf = (correct - wrong * 0.5) / expectedFor(level);
       ctx.finish({
         score,
         perf,

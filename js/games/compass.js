@@ -87,22 +87,35 @@ export const compassGame = {
 
     // 그냥 생성하면 경로가 원점에서 멀어지기만 해서 정답이 '뒤'로 쏠린다.
     // 목표 정답을 먼저 정하고, 그 답이 나오는 경로를 찾을 때까지 다시 뽑는다.
+    //
+    // 8방위 경계(22.5°, 67.5°…)에 걸친 경로도 버린다. 출발점이 (2칸, 1칸) 쪽이면
+    // 26.6°라 경계와 4°밖에 차이 나지 않는다 — 사람 눈으로는 "앞"과 "앞오른쪽"을
+    // 가를 수 없어 사실상 찍기가 된다. 예전에는 이런 문제가 11~24%였다.
+    const MIN_CLEAR = 10;   // 경계에서 최소 이만큼(도) 떨어진 경로만 낸다
+    const usable = r => !(r.x === 0 && r.y === 0) && clearance(r.x, r.y, r.h) >= MIN_CLEAR;
     let lastAns = -1;
     function buildBalancedRoute() {
       const want = ri(0, 7);
       let fallback = null;
       for (let i = 0; i < 400; i++) {
         const r = buildRoute();
-        if (r.x === 0 && r.y === 0) continue;   // 출발점으로 되돌아온 경로는 방향이 없다
+        if (!usable(r)) continue;   // 원점 복귀(방향 없음)이거나 경계에 걸친 경로
         const a = answerIndex(r.x, r.y, r.h);
         if (a === want) return { ...r, ans: a };
         if (!fallback && a !== lastAns) fallback = { ...r, ans: a };
       }
       if (fallback) return fallback;
-      // 최후 폴백도 실제 정답을 계산해서 붙인다 (원점 복귀 경로는 다시 뽑는다)
+      // 최후 폴백도 같은 기준을 지킨다
       let r = buildRoute();
-      while (r.x === 0 && r.y === 0) r = buildRoute();
+      for (let i = 0; i < 5000 && !usable(r); i++) r = buildRoute();
       return { ...r, ans: answerIndex(r.x, r.y, r.h) };
+    }
+
+    // 출발점 방향이 가장 가까운 8방위 경계에서 몇 도 떨어져 있는가 (0 ~ 22.5)
+    function clearance(x, y, h) {
+      const deg = Math.atan2(-x, -y) * 180 / Math.PI - h * 90;
+      const m = ((deg % 45) + 45) % 45;   // 방위 중심(0°)에서 잰 위치. 경계는 22.5°
+      return Math.abs(m - 22.5);
     }
 
     // 출발점(0,0)이 현재 진행방향 기준 몇 시 방향인가 → 8방위 인덱스

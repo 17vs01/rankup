@@ -7,6 +7,10 @@
 import { sfx } from '../audio.js';
 import { judge } from '../feedback.js';
 
+// 오늘의 도전이면 ctx.rng(날짜 시드 난수)가 들어온다. 문제를 만들 때는 반드시 R()을 쓴다 —
+// Math.random을 섞으면 같은 날 같은 종목이어도 사람마다 판이 갈린다.
+let R = Math.random;
+
 const PADS = [
   { css: '#5b8cff', tone: 392 },   // 파랑
   { css: '#34d27b', tone: 523 },   // 초록
@@ -21,6 +25,7 @@ export const simonGame = {
   icon: '🎹',
   desc: '불빛 순서를 그대로 따라가기',
   run(ctx) {
+    R = ctx.rng || Math.random;
     // 레벨이 오르면 시작 길이가 늘고 보여주는 속도가 빨라진다
     const L = Math.max(0, (ctx.rating - 800) / 200);
     const startLen = Math.min(6, 3 + Math.floor(L / 2));
@@ -82,7 +87,7 @@ export const simonGame = {
     function nextRound() {
       // 처음엔 startLen만큼 한꺼번에, 그 뒤로는 한 칸씩
       const add = seq.length === 0 ? startLen : 1;
-      for (let i = 0; i < add; i++) seq.push(Math.floor(Math.random() * 4));
+      for (let i = 0; i < add; i++) seq.push(Math.floor(R() * 4));
       showSeq();
     }
 
@@ -124,8 +129,10 @@ export const simonGame = {
     function end() {
       if (phase === 'over') return;
       phase = 'over';
-      // 기대 길이는 레이팅을 따라 오른다 — 실력이 늘면 기준도 오른다
-      const expect = startLen + 2;
+      // 기대 길이는 레이팅을 따라 오른다 — 실력이 늘면 기준도 오른다.
+      // 시작 길이는 6에서 멈추므로(L 6), 그 뒤로는 기대치를 직접 올린다.
+      // 안 그러면 천장에 닿은 사람은 판마다 LP가 오르기만 한다.
+      const expect = startLen + 2 + Math.max(0, L - 6) * 0.5;
       ctx.finish({
         score: best,
         perf: best / expect,

@@ -1,5 +1,6 @@
 // 집중력 — 반응속도·스트룹·고/노고 중 골라서 단련
-// 1종목이면 5판, 2종목이면 각 3판, 3종목 모두면 각 1판.
+// 1종목이면 3판, 2종목이면 각 2판, 3종목 모두면 각 1판.
+// (예전 5판/각 3판은 스트룹·고노고만 골라도 100초가 넘어 "60초" 약속과 멀었다)
 // 3종목 모두에서 레벨 기준을 전부 충족하면 레벨업. 상한 없음.
 import { sfx } from '../audio.js';
 import { judge, comboTick } from '../feedback.js';
@@ -87,7 +88,7 @@ export const focusGame = {
         html = `3종목 모두 통과하면 레벨업 — 지금 <b>${level}</b>단계<br>`
           + `기준: 반응 ≤ ${goal.reaction}ms · 스트룹 ≥ ${goal.stroop} · 고/노고 ≥ ${goal.gonogo}`;
       } else {
-        const reps = sel.length === 1 ? 5 : 3;
+        const reps = sel.length === 1 ? 3 : 2;
         html = `${sel.length}종목 집중 단련 — 각 ${reps}판`;
       }
       // 조합마다 레이팅이 따로다 — 고르기 전에 내 실력과 기록을 보여준다
@@ -175,7 +176,7 @@ export const focusGame = {
         if (state === 'idle') { arm(); return; }
         if (state === 'wait') {
           // 부정출발
-          clearTimeout(timeoutId);
+          ctx.cancel(timeoutId);
           sfx.bad();
           penalties++;
           state = 'result';
@@ -311,7 +312,9 @@ export const focusGame = {
           if (cur.target && !cur.done) misses++;
           $shape.innerHTML = '';
           cur = null;
-          ctx.delay(show, Math.max(180, ri(250, 550) - shown * 8));
+          // 빈틈 타이머도 붙잡아 둔다 — 안 그러면 20초가 끝난 뒤에도 show가 돌며
+          // 다음 단계 내내 보이지 않는 도형을 띄운다
+          curTimeout = ctx.delay(show, Math.max(180, ri(250, 550) - shown * 8));
         }, holdMs);
       }
 
@@ -328,7 +331,8 @@ export const focusGame = {
 
       show();
       ctx.timer(20, () => {
-        clearTimeout(curTimeout);
+        ctx.cancel(curTimeout);
+        cur = null;
         const net = hits - falses * 2 - misses;
         totalPts += Math.max(0, net);
         stats.gonogoNet = net;
@@ -370,7 +374,7 @@ export const focusGame = {
     }
 
     // 선택은 방법 화면에서 이미 끝났다. 바로 판을 짠다.
-    const reps = sel.length === 1 ? 5 : sel.length === 2 ? 3 : 1;
+    const reps = sel.length === 1 ? 3 : sel.length === 2 ? 2 : 1;
     for (const s of STAGES) {
       if (!sel.includes(s.id)) continue;
       for (let r = 1; r <= reps; r++) plan.push({ id: s.id, rep: r, reps });

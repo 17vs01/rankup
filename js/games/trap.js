@@ -13,10 +13,16 @@
 import { sfx } from '../audio.js';
 import { judge } from '../feedback.js';
 
-const ROUNDS = 5;
-const EXPECTED = 3.3;
+// 오늘의 도전이면 ctx.rng(날짜 시드 난수)가 들어온다. 문제를 만들 때는 반드시 R()을 쓴다 —
+// Math.random을 섞으면 같은 날 같은 종목이어도 사람마다 판이 갈린다.
+let R = Math.random;
 
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+// 한 판이 2~4분이라 "60초" 약속과 너무 멀었다. 풀이를 읽는 종목이라 시간 제한은
+// 두지 않고 문제 수를 줄인다. 기대치는 예전과 같은 비율(66%)로 맞춘다.
+const ROUNDS = 3;
+const EXPECTED = 2.0;
+
+const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
 const pick = arr => arr[ri(0, arr.length - 1)];
 
 // 받침에 따라 조사를 고른다 (공이 / 쿠키가, 가방은 / 커피는, 필통을 / 쿠키를)
@@ -93,7 +99,7 @@ const PRICE_PAIRS = [
 function genBatBall() {
   const p = pick(PRICE_PAIRS);
   // 변형: "얼마 더 비싸다"(차) / "몇 배 비싸다"(비율) — 공식이 완전히 다르다
-  if (Math.random() < 0.35) {
+  if (R() < 0.35) {
     const k = ri(3, 6);
     const x = ri(2, 12) * 100;
     const S = x * (k + 1);
@@ -115,18 +121,18 @@ function genBatBall() {
 
 // ===== 배로 자라는 것 =====
 function genLily() {
-  const r = Math.random() < 0.3 ? 3 : 2;
+  const r = R() < 0.3 ? 3 : 2;
   const n = ri(20, 48);
   // 변형: 절반은 며칠째? / 9분의 1은? / 거꾸로 묻기
-  if (Math.random() < 0.25) {
+  if (R() < 0.25) {
     const k = ri(2, 4);
     return {
       q: `연못의 수련이 매일 ${r}배로 넓어집니다. ${n}일째에 연못을 전부 덮었습니다. ${n - k}일째에는 연못의 몇 분의 1을 덮고 있었을까요? (분모를 답하세요)`,
       ans: Math.pow(r, k), trap: k * r, alts: [Math.pow(r, k) * r, k, n - k], unit: '분의 1',
-      why: `하루 전은 ${r}분의 1, 이틀 전은 ${r}×${r} = ${r * r}분의 1… ${k}일 전이면 ${r}의 ${k}제곱인 ${Math.pow(r, k)}분의 1입니다. 곱하기를 더하기로 착각하면 ${k * r}이 나옵니다.`,
+      why: `하루 전은 ${r}분의 1, 이틀 전은 ${r}×${r} = ${r * r}분의 1… ${k}일 전이면 ${r}의 ${k}제곱인 ${Math.pow(r, k)}분의 1입니다. 거듭제곱을 곱셈으로 착각하면(${r}×${k}) ${k * r}분의 1이라고 답하게 됩니다.`,
     };
   }
-  const half = Math.random() < 0.6;
+  const half = R() < 0.6;
   const part = half ? r : r * r;
   const days = half ? 1 : 2;
   return {
@@ -141,7 +147,7 @@ function genLily() {
 function genMachine() {
   const m = pick([3, 4, 5, 6]);
   // 변형: 같은 비율(답 = m) / 다른 비율(계산 필요) — 반사적으로 m을 찍으면 틀린다
-  if (Math.random() < 0.4) {
+  if (R() < 0.4) {
     const p = pick([2, 3, 4]);
     const q = m * p * ri(1, 3);
     const ans = q * m / (m * p);
@@ -229,7 +235,7 @@ function genClock() {
   const k = ri(4, 7);
   const j = ri(k + 3, 12);
   // 변형: 거꾸로 묻기 / 기본
-  if (Math.random() < 0.3) {
+  if (R() < 0.3) {
     const T = i * (j - 1);
     return {
       q: `괘종시계가 ${k}시에 종을 ${k}번 치는 데 ${i * (k - 1)}초가 걸립니다. 어느 날 종을 치는 데 ${T}초가 걸렸다면 몇 시였을까요?`,
@@ -248,7 +254,7 @@ function genClock() {
 // ===== 경기 수 =====
 // 변형: 토너먼트(n-1) / 리그전(n(n-1)/2) — 지문을 안 읽으면 반드시 틀린다
 function genTournament() {
-  if (Math.random() < 0.4) {
+  if (R() < 0.4) {
     const n = ri(6, 14);
     const ans = n * (n - 1) / 2;
     return {
@@ -279,7 +285,7 @@ function genTournament() {
 // 변형: 악수(방향 없음, /2) / 선물 교환(방향 있음, /2 안 함) ← 후자는 함정이 아니다
 function genHandshake() {
   const n = ri(6, 15);
-  if (Math.random() < 0.4) {
+  if (R() < 0.4) {
     return {
       q: `모임에 온 ${n}명이 <b>서로에게 선물을 하나씩</b> 줍니다 (A가 B에게, B가 A에게 각각). 선물은 모두 몇 개일까요?`,
       ans: n * (n - 1), trap: n * (n - 1) / 2, alts: [n * n, n, Math.round(n * n / 2)], unit: '개',
@@ -302,7 +308,7 @@ function genSnail() {
   const k = ri(3, 8);
   const d = a + (a - b) * k;
   // 변형: 마지막 날 예외가 없는 경우(딱 나눠떨어짐)를 섞어 반사 답을 막는다
-  if (Math.random() < 0.3) {
+  if (R() < 0.3) {
     const days = ri(4, 9);
     const d2 = (a - b) * days;
     return {
@@ -325,7 +331,7 @@ function genSnail() {
 const SPEED_PAIRS = [[30, 60, 40], [20, 60, 30], [40, 60, 48], [20, 30, 24], [30, 70, 42], [24, 40, 30], [60, 20, 30]];
 function genSpeed() {
   const [a, b, h] = pick(SPEED_PAIRS);
-  if (Math.random() < 0.4) {
+  if (R() < 0.4) {
     const t = ri(2, 4);
     return {
       q: `${t}시간은 시속 ${a}km로, 이어서 ${t}시간은 시속 ${b}km로 달렸습니다. 전체 평균 속도는 시속 몇 km일까요?`,
@@ -347,7 +353,7 @@ function genScale() {
   const ans = pick([2, 3, 4]);
   const lo = Math.pow(3, ans - 1) + 1;
   const n = ri(lo, Math.pow(3, ans));
-  if (Math.random() < 0.25) {
+  if (R() < 0.25) {
     return {
       q: `똑같이 생긴 동전 ${n}개 중 하나만 조금 가볍습니다. 양팔저울을 <b>운이 아주 좋다면</b> 최소 몇 번 만에 찾을 수 있을까요?`,
       ans: 1, trap: ans, alts: [Math.ceil(Math.log2(n)), n - 1, n, 2], unit: '번',
@@ -420,7 +426,7 @@ const DISCOUNT_PAIRS = [[20, 20, 36], [30, 20, 44], [50, 20, 60], [10, 10, 19],
   [40, 50, 70], [25, 20, 40], [30, 30, 51], [50, 40, 70], [20, 10, 28]];
 function genDiscount() {
   // 변형: 할인 겹치기 / 할인 후 같은 비율 인상(원래로 안 돌아온다)
-  if (Math.random() < 0.4) {
+  if (R() < 0.4) {
     // r²/100이 정수여야 답이 소수가 되지 않는다 (25%는 93.75%가 나온다)
     const r = pick([10, 20, 30, 40, 50]);
     const back = 100 - r * r / 100;
@@ -596,7 +602,7 @@ function genVenn() {
   const neither = T - (a + b - both);
   if (neither < 2 || a > T || b > T) return genVenn();
   const S = pick([['축구', '농구'], ['커피', '차'], ['영화', '독서']]);
-  if (Math.random() < 0.35) {
+  if (R() < 0.35) {
     return {
       q: `${T}명 중 ${S[0]}을(를) 좋아하는 사람이 ${a}명, ${S[1]}을(를) 좋아하는 사람이 ${b}명, <b>둘 다</b> 좋아하는 사람이 ${both}명입니다. ${S[0]}<b>만</b> 좋아하는 사람은 몇 명일까요?`,
       ans: a - both, trap: a, alts: [b - both, a + both, T - a], unit: '명',
@@ -673,7 +679,7 @@ function genOrder() {
   const lines = [];
   for (let i = 0; i < order.length - 1; i++) {
     // 무겁다/가볍다를 섞어서 방향을 통일해 읽지 못하게 한다
-    lines.push(Math.random() < 0.5
+    lines.push(R() < 0.5
       ? `${order[i + 1]}은(는) ${order[i]}보다 무겁습니다`
       : `${order[i]}은(는) ${order[i + 1]}보다 가볍습니다`);
   }
@@ -858,6 +864,7 @@ export const trapGame = {
   icon: '🪤',
   desc: '한 번 더 생각해야 풀리는 문제',
   run(ctx) {
+    R = ctx.rng || Math.random;
     const L = Math.max(0, (ctx.rating - 1000) / 200);
     const pool = FAMILIES.filter(([, lvl]) => L >= lvl);
 
@@ -865,7 +872,8 @@ export const trapGame = {
     let cur = null, locked = false;
     const used = new Set();   // 한 판에 같은 가족은 한 번만
     // 가족별로 지금까지 몇 번 만났는지 (판을 넘어 이어진다)
-    const seen = ctx.state.trapSeen || (ctx.state.trapSeen = {});
+    // 오늘의 도전은 모두 같은 판이어야 하니 내 출제 이력을 보지 않는다
+    const seen = ctx.daily ? {} : (ctx.state.trapSeen || (ctx.state.trapSeen = {}));
     const elapsed = ctx.stopwatch();
 
     ctx.body.innerHTML = `
@@ -894,7 +902,11 @@ export const trapGame = {
       used.add(fam);
       seen[fam] = (seen[fam] || 0) + 1;
       ctx.persist();
+      // 숫자에 따라 함정 답이 우연히 정답과 같아지는 판이 있다 (섞는 두 소금물의 양이
+      // 같거나, 대수와 개수의 비율이 우연히 같을 때). 그러면 함정이 없는데 해설은
+      // "이렇게 풀면 틀린다"고 말해 정답과 모순된다. 그런 판은 다시 뽑는다.
       cur = gen();
+      for (let t = 0; t < 30 && Math.round(cur.trap) === cur.ans; t++) cur = gen();
       locked = false;
       $round.innerHTML = `${round} / ${ROUNDS}문제 · 정답 <b>${correct}</b>`;
       $q.innerHTML = cur.q;   // 조건을 굵게 강조하는 문제가 있다
@@ -922,11 +934,11 @@ export const trapGame = {
         judge(ctx.body, false);
         btn.classList.add('wrong');
         for (const c of $c.children) if (Number(c.dataset.v) === cur.ans) c.classList.add('correct');
-        if (v === cur.trap) trapped++;
+        if (v === Math.round(cur.trap)) trapped++;
       }
       // 함정이 없는 문제(plain)에서는 "과하게 생각한" 쪽이 오답이다
       const verdict = ok ? '정답'
-        : v === cur.trap ? (cur.plain ? '과하게 생각했습니다' : '직관의 함정에 걸렸습니다')
+        : v === Math.round(cur.trap) ? (cur.plain ? '과하게 생각했습니다' : '직관의 함정에 걸렸습니다')
         : '오답';
       $why.innerHTML = `
         <div class="tq-verdict ${ok ? 'good' : 'bad'}">${verdict} — 정답 ${cur.ans.toLocaleString()}${cur.unit}</div>
@@ -946,8 +958,9 @@ export const trapGame = {
         score: correct,
         perf: correct / EXPECTED,
         detail: `${correct}/${ROUNDS} 정답${trapped ? ` · 함정에 ${trapped}번 걸림` : ' · 함정에 안 걸림'}`,
-        // 5문제 전부 맞힌 판만 시간 기록 — 찍어서 빨리 끝낸 판은 기록이 아니다
-        time: perfect ? { key: 'time_perfect', value: sec, unit: 'sec', label: '5문제 전원 정답' } : null,
+        // 전부 맞힌 판만 시간 기록 — 찍어서 빨리 끝낸 판은 기록이 아니다.
+        // 문제 수가 5개였던 시절 기록과 섞이지 않게 키를 새로 쓴다.
+        time: perfect ? { key: 'time_perfect3', value: sec, unit: 'sec', label: '3문제 전원 정답' } : null,
       });
     }
 

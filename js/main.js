@@ -1,5 +1,5 @@
 import {
-  loadState, saveState, applyDecay, recordSession, recordSudoku, getVariant,
+  loadState, saveState, applyDecay, recordSession, recordSudoku, getVariant, touchStreak,
   initStorage, flushState, clearState,
 } from './storage.js';
 import { tierOf, tierProgress, ratingDelta, timeToDecay, TIERS } from './rating.js';
@@ -10,7 +10,7 @@ import { seededRandom, seedFor, dailyChallengeId } from './daily.js';
 import { titleOf, bestTitle, nextTitleTier } from './titles.js';
 import {
   initPlatform, inToss, getNickname, setLocalNickname, canEditNickname,
-  submitScore, openLeaderboard, hasLeaderboard, onBack, getUserKey, lockScreen,
+  submitScore, openLeaderboard, hasLeaderboard, onBack, getUserKey, lockScreen, shareText,
 } from './platform.js';
 import { mathGame } from './games/math.js';
 import { lexiGame } from './games/lexi.js';
@@ -20,7 +20,7 @@ import { unpredictGame } from './games/unpredict.js';
 import { chronoGame } from './games/chrono.js';
 import { compassGame } from './games/compass.js';
 import { eyeballGame } from './games/eyeball.js';
-import { sudokuGame, SUDOKU_LEVELS } from './games/sudoku.js';
+import { sudokuGame, SUDOKU_LEVELS, SUDOKU_DAILY } from './games/sudoku.js';
 import { t24Game } from './games/t24.js';
 import { schulteGame } from './games/schulte.js';
 import { simonGame } from './games/simon.js';
@@ -57,7 +57,13 @@ let currentGame = null;
 let sessionActive = false;
 let sessionToken = 0;
 let currentCtx = null;
-let dailyMode = false;   // 이번 판이 데일리 챌린지인가
+let dailyMode = false;   // 이번 판이 오늘의 도전인가
+let challengeFirst = false;   // 오늘의 도전 첫 시도인가 (아니면 연습 판)
+
+// 오늘의 도전은 모두가 같은 판을 받아야 한다. 난이도를 각자의 레이팅으로 정하면
+// 시드가 같아도 문제가 달라지므로, 도전만은 이 고정 레이팅으로 난이도를 정한다.
+// 그래서 도전은 LP를 움직이지 않는다 — 내 수준과 무관한 판이라 LP로 재면 틀린다.
+const CHALLENGE_RATING = 1200;
 
 // ---------- 화면 전환 ----------
 // 전환 직후 짧게 입력을 막는다. 게임 마지막 탭이 결과 화면 버튼으로 새는
@@ -102,7 +108,7 @@ const TIME_RECORDS = {
   anagram: { unit: 'count', title: '내 기록', order: [['ag_streak', '최다 연속']] },
   unpredict: { unit: 'count', title: '내 기록', order: [['ai_rate_min', '최저 AI 적중률', 'pct'], ['evade_best', '최다 연속 회피']] },
   pattern: { unit: 'count', title: '내 기록', order: [['pt_streak', '최다 연속']] },
-  trap:    { unit: 'sec', title: '내 기록', order: [['time_perfect', '5문제 전원 정답']] },
+  trap:    { unit: 'sec', title: '내 기록', order: [['time_perfect3', '3문제 전원 정답'], ['time_perfect', '5문제 전원 정답 (예전 방식)']] },
 };
 
 // 홈 목록 한 줄에 넣을 대표 기록 (가장 어려운 난이도 우선)
@@ -212,11 +218,14 @@ function renderHome() {
   const $ch = $('#btn-challenge');
   if (chGame) {
     const cleared = state.daily && state.daily.challenge === chId;
+    const tried = state.daily && state.daily.challengeTried;
     $('#challenge-name').textContent = `${chGame.icon} ${chGame.name}`;
     $('#challenge-desc').textContent = cleared
-      ? '오늘 도전 완료 · 다시 풀어도 같은 문제예요'
-      : '모두가 똑같은 문제를 풉니다';
-    $ch.classList.toggle('done', !!cleared);
+      ? `오늘 기록 ${nf(state.daily.challengeScore || 0)} · 다시 풀면 연습 판`
+      : tried
+        ? '도전 기회를 썼어요 · 다시 풀면 연습 판'
+        : '모두가 똑같은 문제 · 하루 한 번';
+    $ch.classList.toggle('done', !!(cleared || tried));
     $ch.onclick = () => startSession(chGame, false, false, true);
     $ch.classList.remove('hidden');
   } else {
@@ -387,7 +396,20 @@ function markDaily(gameId) {
 
 // ---------- 주간 리그 ----------
 // 토스 리더보드에 "평생 누적"을 올리면 상위권이 고착돼 새 유저가 포기한다.
-// 그래서 이번 주에 딴 LP만 올린다. 월요일 04시(KST 기준 새벽)에 리셋.
+// 그래서 이번 주 몫만 올린다. 월요일 04시(KST 기준 새벽)에 리셋.
+//
+// 예전에는 "이번 주에 딴 LP의 합"이었는데 두 가지가 틀렸다.
+//  - 실력대로 꾸준히 하면 레이팅이 균형점에 머물러 판당 +2~3밖에 안 쌓인다
+//  - 잃은 LP를 빼지 않으니, 일부러 한 판 망치고(−24) 그걸 되찾으면 전부 점수가 됐다
+// 지금은 판마다 성적(perf) 자체를 점수로 준다. 기대만큼 하면 10점, 최대 20점.
+// perf는 내 레이팅에 맞춘 난이도 대비 성적이라, 일부러 망치면 그 판이 0점이고
+// 레이팅이 조금 내려가 봤자 다음 판이 거의 안 쉬워진다 — 손해만 본다.
+const WEEK_PTS_PER_GAME = 10;
+const WEEK_PTS_MAX = 20;
+function weekPointsFor(perf) {
+  const p = Number.isFinite(perf) ? perf : 0;
+  return Math.round(WEEK_PTS_PER_GAME * Math.max(0, Math.min(WEEK_PTS_MAX / WEEK_PTS_PER_GAME, p)));
+}
 function weekKeyOf(t = Date.now()) {
   const d = new Date(t);
   d.setHours(d.getHours() - 4);              // 새벽 4시를 하루의 시작으로
@@ -398,17 +420,18 @@ function weekKeyOf(t = Date.now()) {
 
 function weeklyBucket() {
   const key = weekKeyOf();
-  if (!state.week || state.week.key !== key) state.week = { key, lp: 0, sessions: 0 };
+  if (!state.week || state.week.key !== key) state.week = { key, pts: 0, sessions: 0 };
   return state.week;
 }
 
-function addWeeklyLp(delta) {
+function addWeekly(points) {
   const w = weeklyBucket();
-  w.lp += Math.max(0, delta);   // 잃은 LP까지 빼면 "안 하는 게 이득"이 된다
+  w.pts += Math.max(0, points);
   w.sessions++;
+  return points;
 }
 
-function weeklyScore() { return weeklyBucket().lp; }
+function weeklyScore() { return weeklyBucket().pts; }
 
 // ---------- 스트릭 프리즈 ----------
 // 7일 연속마다 보호권 1개(최대 2개). 하루 빠지면 자동으로 하나 쓰고 스트릭을 지킨다.
@@ -514,14 +537,15 @@ function makeCtx(game) {
   let finished = false;
   return {
     body: $('#game-body'),
-    rating: v ? v.rating : 1000,
+    rating: dailyMode ? CHALLENGE_RATING : (v ? v.rating : 1000),
     state,
-    // 데일리 챌린지면 모두가 같은 판을 받도록 시드 난수를 쓴다.
-    // 게임이 ctx.rng()를 쓰면 자동으로 따라온다 (안 쓰면 평소처럼 무작위).
+    // 오늘의 도전이면 모두가 같은 판을 받도록 시드 난수를 쓴다.
+    // 게임은 문제를 만들 때 반드시 ctx.rng()를 써야 한다 (Math.random을 쓰면 판이 갈린다).
     daily: dailyMode,
     rng: dailyMode ? seededRandom(seedFor(dayKeyOf(), game.id)) : Math.random,
-    // 모드가 있는 종목이면 지금 고른 모드 id (없으면 null)
-    mode: game.modes ? (state.modes[game.id] || game.modes[0].id) : null,
+    // 모드가 있는 종목이면 지금 고른 모드 id (없으면 null). 도전은 기본 모드로 고정.
+    mode: game.modes
+      ? (dailyMode ? game.modes[0].id : (state.modes[game.id] || game.modes[0].id)) : null,
     setTitle(t) { $('#game-title').textContent = t; },
     setTimerText(s) { $('#game-timer').textContent = s; },
     persist() { saveState(state); },
@@ -537,7 +561,14 @@ function makeCtx(game) {
       rec.fn = () => { retireTimer(rec); fn(); };
       rec.id = setTimeout(rec.fn, ms);
       activeTimers.push(rec);
-      return rec.id;
+      return rec;
+    },
+    // delay로 건 타이머를 끊는다. 일시정지를 거치면 실제 id가 바뀌므로
+    // clearTimeout(id)로는 못 끊는다 — 반드시 이걸 쓴다.
+    cancel(rec) {
+      if (!rec || rec.dead) return;
+      if (rec.id) clearTimeout(rec.id);
+      retireTimer(rec);
     },
     // 반복 타이머. 일시정지 때 같이 멈췄다가 돌아온다.
     // 재개하면 실제 id가 바뀌므로 clearInterval(id)로는 못 끊는다 —
@@ -596,6 +627,7 @@ function makeCtx(game) {
       finished = true;
       clearSession();
       if (result && result.annex) endAnnex(game, result);
+      else if (dailyMode) endChallenge(game, result);
       else endSession(game, result);
     },
   };
@@ -631,6 +663,13 @@ function launch(game, quick, prepare) {
       retireTimer(cdRec);
       sfx.start();
       $body.innerHTML = '';
+      if (dailyMode) {
+        // 도전 기회는 판이 시작되는 순간 쓴다. 끝날 때 적으면 문제를 보고 ✕로
+        // 나간 뒤 답을 외워 다시 푸는 길이 열린다 (Wordle과 같은 한 번뿐인 판).
+        const plan = todayPlan();
+        challengeFirst = !plan.challengeTried;
+        if (challengeFirst) { plan.challengeTried = game.id; saveState(state); }
+      }
       currentCtx = makeCtx(game);
       if (prepare) prepare(currentCtx);
       game.run(currentCtx);
@@ -847,12 +886,10 @@ function endSession(game, result) {
   const gotTitle = titleAfter && (!titleBefore || titleAfter.step > titleBefore.step)
     ? titleAfter : null;
 
-  // 오늘의 훈련 진행 + 주간 획득 LP + 오늘의 도전 완료 표시
+  // 오늘의 훈련 진행 + 이번 주 점수
   const justFinishedDaily = markDaily(game.id);
-  addWeeklyLp(delta);
+  const weekPts = addWeekly(weekPointsFor(result.perf));
   const plan = todayPlan();
-  const wasChallenge = dailyMode;
-  if (wasChallenge) plan.challenge = game.id;
   saveState(state);
 
   // 토스 안이면 이번 주 점수를 리더보드에 올린다 (실패해도 조용히 넘어간다)
@@ -893,7 +930,7 @@ function endSession(game, result) {
     ${gotTitle ? `<div class="result-title">🏆 칭호 획득<b>${gotTitle.name}</b></div>` : ''}
     ${tierUp ? `<div class="result-tierup" style="color:${afterTier.color}">${afterTier.name} 승급</div>` : ''}
     ${tierDown ? `<div class="result-tierup" style="color:var(--bad)">${afterTier.name} 강등</div>` : ''}
-    ${wasChallenge ? '<div class="result-daily done">🗓 오늘의 도전 완료</div>' : ''}
+    <div class="result-week">🏆 이번 주 +${weekPts}점 · 합계 ${nf(weeklyScore())}점</div>
     ${justFinishedDaily
       ? '<div class="result-daily done">🎯 오늘의 훈련 완주!</div>'
       : `<div class="result-daily">🎯 오늘의 훈련 ${plan.done.length} / ${plan.ids.length}</div>`}
@@ -926,6 +963,52 @@ function endSession(game, result) {
   }
 }
 
+// ---------- 오늘의 도전 결과 ----------
+// 모두가 같은 판(고정 난이도)이라 내 실력을 재는 판이 아니다 — LP는 움직이지 않는다.
+// 첫 시도만 이번 주 점수·오늘의 훈련·스트릭에 들어가고, 다시 푼 판은 연습이다.
+// (예전에는 다시 풀 때마다 LP가 붙어서, 답을 외운 문제로 점수를 무한히 쌓을 수 있었다)
+function endChallenge(game, result) {
+  const plan = todayPlan();
+  const first = challengeFirst;
+  challengeFirst = false;
+  let weekPts = 0, justFinishedDaily = false, gotFreeze = false;
+  if (first) {
+    plan.challenge = game.id;
+    plan.challengeScore = result.score;
+    justFinishedDaily = markDaily(game.id);
+    weekPts = addWeekly(weekPointsFor(result.perf));
+    state.totalSessions++;
+    touchStreak(state);
+    gotFreeze = grantFreezeIfDue();
+    saveState(state);
+    if (inToss()) submitScore(weeklyScore());
+  }
+  sfx.finish();
+
+  const mine = plan.challengeScore;
+  $('#result-body').innerHTML = `
+    <div class="result-game">🗓 오늘의 도전 · ${game.name}</div>
+    <div class="result-score">${nf(result.score)}</div>
+    <div class="result-detail">${result.detail}</div>
+    ${first
+      ? `<div class="result-week">🏆 이번 주 +${weekPts}점 · 합계 ${nf(weeklyScore())}점</div>`
+      : `<div class="result-best">연습 판이라 점수에 반영되지 않아요 · ${mine !== undefined
+        ? `오늘 기록 ${nf(mine)}` : '첫 판을 중간에 그만둬서 오늘 기록은 없어요'}</div>`}
+    ${first && justFinishedDaily ? '<div class="result-daily done">🎯 오늘의 훈련 완주!</div>' : ''}
+    ${gotFreeze ? `<div class="result-newrecord">❄ ${state.streak}일 연속 · 스트릭 보호권 +1</div>` : ''}
+    <div class="result-annex">모두가 같은 문제를 푸는 판이라 LP는 변하지 않아요</div>
+    <div class="result-buttons">
+      <button class="btn-primary" id="btn-share">결과 공유</button>
+      <button class="btn-secondary" id="btn-again">${game.icon} ${game.name} 랭크전</button>
+      <button class="btn-secondary" id="btn-home">홈으로</button>
+    </div>
+  `;
+  $('#btn-share').addEventListener('click', () => shareChallenge(game, result, first));
+  $('#btn-again').addEventListener('click', () => startSession(game, !game.picker, true));
+  $('#btn-home').addEventListener('click', renderHome);
+  show('#screen-result');
+}
+
 // ---------- 전체 화면 축하 ----------
 // 결과 화면 위에 덮어씌운다. 탭하면 사라지고 결과가 그대로 남는다.
 function celebrate(kicker, name, sub) {
@@ -948,6 +1031,14 @@ function celebrate(kicker, name, sub) {
 // 랭크 밖이다. LP·부식·종합 점수·리그·오늘의 훈련 어디에도 끼지 않는다.
 // 대신 난이도 해금과 난이도별 최단 기록이 자체 진행감을 만든다.
 let pendingLevel = null;   // 진행 중인 판을 버리고 고르려는 난이도
+
+// 받침이 있으면 "으로", 없거나 ㄹ받침이면 "로". (보통으로 / 전문가로 / 오늘의 스도쿠로)
+// 예전 문구는 늘 "으로"라 "전문가으로"가 나왔다.
+function euro(word) {
+  const c = word.charCodeAt(word.length - 1) - 0xAC00;
+  const jong = c >= 0 && c <= 11171 ? c % 28 : 0;
+  return word + (jong === 0 || jong === 8 ? '로' : '으로');
+}
 
 // 받침이 있으면 "을", 없으면 "를". (쉬움을 / 전문가를)
 function eul(word) {
@@ -974,10 +1065,13 @@ function renderSudoku() {
   const $cont = $('#sd-continue');
   if (saved) {
     const el = Math.round(saved.elapsed || 0);
+    const label = saved.day
+      ? (saved.day === dayKeyOf() ? '오늘의 스도쿠' : `${saved.day.split('-').slice(1).join('/')} 스도쿠`)
+      : saved.level;
     $('#sd-continue-desc').textContent =
-      `${saved.level} · ${fmtDur(el, 'sec')} 경과 · 실수 ${saved.mistakes || 0}`;
+      `${label} · ${fmtDur(el, 'sec')} 경과 · 실수 ${saved.mistakes || 0}`;
     $cont.classList.remove('hidden');
-    $cont.onclick = () => startSudoku(saved.level);
+    $cont.onclick = () => startSudoku(saved.level, saved.day || null);
   } else {
     $cont.classList.add('hidden');
   }
@@ -990,11 +1084,13 @@ function renderSudoku() {
     const b = document.createElement('button');
     b.className = 'sd-level' + (open ? '' : ' locked');
     b.innerHTML = `
-      <span class="sl-mark">${open ? (rec !== undefined ? '✓' : '') : '🔒'}</span>
+      <span class="sl-mark">${open ? (p.perfect[lv.name] ? '★' : rec !== undefined ? '✓' : '') : '🔒'}</span>
       <span class="sl-main">
         <span class="sl-name">${lv.name}</span>
         <span class="sl-sub">${open
-          ? (rec !== undefined ? `최단 ${fmtDur(rec, 'sec')}` : `단서 ${lv.clues}개 · 첫 도전`)
+          ? (rec !== undefined
+            ? `최단 ${fmtDur(rec, 'sec')}${p.perfect[lv.name] ? ' · 완벽 클리어' : ''}`
+            : `단서 ${lv.clues}개 · 첫 도전`)
           : `${eul(SUDOKU_LEVELS[i - 1].name)} 완성하면 열려요`}</span>
       </span>`;
     if (open) {
@@ -1007,15 +1103,39 @@ function renderSudoku() {
     $list.appendChild(b);
   });
 
+  // 오늘의 스도쿠 — 해금과 무관하게 누구나. 오늘 완성했으면 기록을 보여준다
+  const today = dayKeyOf();
+  const doneToday = p.daily[today];
+  const $daily = $('#sd-daily');
+  $daily.classList.toggle('done', !!doneToday);
+  $('#sd-daily-sub').textContent = doneToday
+    ? `오늘 완성 ✓ ${fmtDur(doneToday.sec, 'sec')}${!doneToday.mistakes && !doneToday.hints ? ' · 완벽' : ''} · 다시 풀어도 같은 판`
+    : `${dailyStreakText(p.daily)}`;
+  $daily.onclick = () => {
+    if (saved && !(saved.day === today)) { askDiscard(SUDOKU_DAILY.name, saved.day ? '지난 스도쿠' : saved.level, today); return; }
+    startSudoku(SUDOKU_DAILY.name, today);
+  };
+
   $('#sd-discard').classList.add('hidden');
   $('#sd-scroll').scrollTop = 0;
   show('#screen-sudoku');
 }
 
-function askDiscard(levelName, savedName) {
+// 오늘의 스도쿠를 며칠 연속 완성했는가 — 매일 들어올 이유를 준다
+function dailyStreakText(daily) {
+  let n = 0;
+  const d = new Date();
+  if (!daily[dayKeyOf(d.getTime())]) d.setDate(d.getDate() - 1);   // 오늘은 아직일 수 있다
+  while (daily[dayKeyOf(d.getTime())]) { n++; d.setDate(d.getDate() - 1); }
+  return n >= 2 ? `${n}일 연속 완성 중 · 오늘 판이 기다려요` : '하루 한 판 · 매일 새 판이 열려요';
+}
+
+let pendingDay = null;   // 버리고 시작하려는 판이 오늘의 스도쿠면 그 날짜
+function askDiscard(levelName, savedName, day = null) {
   pendingLevel = levelName;
+  pendingDay = day;
   $('#sd-discard-body').textContent =
-    `진행 중인 "${savedName}" 판이 사라집니다. ${levelName}으로 새로 시작할까요?`;
+    `진행 중인 "${savedName}" 판이 사라집니다. ${euro(levelName)} 새로 시작할까요?`;
   $('#sd-discard').classList.remove('hidden');
 }
 
@@ -1025,23 +1145,24 @@ $('#btn-sd-discard-cancel').addEventListener('click', () => {
 });
 $('#btn-sd-discard-ok').addEventListener('click', () => {
   if (!pendingLevel) return;
-  const lv = pendingLevel;
-  pendingLevel = null;
+  const lv = pendingLevel, day = pendingDay;
+  pendingLevel = null; pendingDay = null;
   state.sudoku = null;
   saveState(state);
-  startSudoku(lv);
+  startSudoku(lv, day);
 });
 
-function startSudoku(levelName) {
+function startSudoku(levelName, day = null) {
   if (sessionActive) return;
   dailyMode = false;
   $('#game-title').textContent = `🔢 스도쿠 · ${levelName}`;
-  launch(sudokuGame, false, ctx => { ctx.sudokuLevel = levelName; });
+  launch(sudokuGame, false, ctx => { ctx.sudokuLevel = levelName; ctx.sudokuDay = day; });
 }
 
 // 별관 결과 — LP 대신 시간·실수·해금으로 말한다
 function endAnnex(game, r) {
-  const { isNew, prev, unlockedName } = recordSudoku(state, r.level, r);
+  if (r.day) return endDailySudoku(r);
+  const { isNew, prev, unlockedName, perfect, firstPerfect } = recordSudoku(state, r.level, r);
   const p = state.sudokuProg;
   const best = p.recs[r.level];
   if (r.solved) sfx.tierup(); else sfx.finish();
@@ -1053,8 +1174,9 @@ function endAnnex(game, r) {
     <div class="result-game">스도쿠 · ${r.level}</div>
     <div class="result-score">${r.solved ? fmtDur(r.sec, 'sec') : '실패'}</div>
     <div class="result-detail">${r.solved
-      ? `실수 ${r.mistakes}회 · 기준 ${fmtDur(r.expect, 'sec')}`
+      ? `실수 ${r.mistakes}회 · 힌트 ${r.hints || 0}회 · 기준 ${fmtDur(r.expect, 'sec')}`
       : `실수 3회로 끝났습니다 · ${fmtDur(r.sec, 'sec')} 진행`}</div>
+    ${perfect ? `<div class="result-newrecord">★ 완벽 클리어${firstPerfect ? ` — ${r.level} 첫 완벽` : ''}</div>` : ''}
     ${r.solved && isNew
       ? `<div class="result-newrecord">⏱ ${r.level} 최단 기록${prev !== undefined ? ` — 이전 ${fmtDur(prev, 'sec')}` : ''}</div>`
       : (r.solved && best !== undefined ? `<div class="result-best">⏱ ${r.level} 최단 ${fmtDur(best, 'sec')}</div>` : '')}
@@ -1075,6 +1197,42 @@ function endAnnex(game, r) {
   show('#screen-result');
 }
 
+// 오늘의 스도쿠 결과 — 해금·난이도 기록과 무관하고, 모두 같은 판이라 공유할 거리가 된다
+function endDailySudoku(r) {
+  const { isNew, prev, perfect } = recordSudoku(state, SUDOKU_DAILY.name, r);
+  if (r.solved) sfx.tierup(); else sfx.finish();
+  $('#result-body').innerHTML = `
+    <div class="result-game">🗓 오늘의 스도쿠</div>
+    <div class="result-score">${r.solved ? fmtDur(r.sec, 'sec') : '실패'}</div>
+    <div class="result-detail">${r.solved
+      ? `실수 ${r.mistakes}회 · 힌트 ${r.hints || 0}회`
+      : `실수 3회로 끝났습니다 · ${fmtDur(r.sec, 'sec')} 진행`}</div>
+    ${perfect ? '<div class="result-newrecord">★ 완벽 클리어</div>' : ''}
+    ${r.solved && prev !== undefined
+      ? (isNew ? `<div class="result-newrecord">⏱ 오늘 기록 단축 — 이전 ${fmtDur(prev, 'sec')}</div>`
+        : `<div class="result-best">⏱ 오늘 기록 ${fmtDur(prev, 'sec')}</div>`) : ''}
+    <div class="result-annex">모두가 같은 판을 풉니다 · 내일 새 판이 열려요</div>
+    <div class="result-buttons">
+      ${r.solved ? '<button class="btn-primary" id="btn-sd-share">결과 공유</button>' : ''}
+      <button class="${r.solved ? 'btn-secondary' : 'btn-primary'}" id="btn-sd-list">스도쿠 별관</button>
+      <button class="btn-secondary" id="btn-home">홈으로</button>
+    </div>
+  `;
+  const $sh = $('#btn-sd-share');
+  if ($sh) $sh.addEventListener('click', async () => {
+    const d = new Date();
+    const best = state.sudokuProg.daily[r.day];
+    shareToast(await shareText([
+      `RANKUP 오늘의 스도쿠 ${d.getMonth() + 1}/${d.getDate()}`,
+      `⏱ ${fmtDur(best ? best.sec : r.sec, 'sec')}${perfect ? ' ★ 완벽' : ` · 실수 ${r.mistakes} · 힌트 ${r.hints || 0}`}`,
+      '모두가 같은 판이에요. 몇 분 걸리나요?',
+    ].join('\n')));
+  });
+  $('#btn-sd-list').addEventListener('click', renderSudoku);
+  $('#btn-home').addEventListener('click', renderHome);
+  show('#screen-result');
+}
+
 $('#btn-sudoku').addEventListener('click', renderSudoku);
 $('#btn-sudoku-back').addEventListener('click', renderHome);
 $('#btn-sd-rules').addEventListener('click', () => showRules(sudokuGame));
@@ -1090,16 +1248,30 @@ async function shareResult(game, result, delta, after) {
   const bar = plan.ids.map(id => plan.done.includes(id) ? '🟩' : '⬜').join('');
   const crown = myBestTitle();
   const text = [
-    `RANKUP ${date} · ${game.icon} ${game.name}${dailyMode ? ' (오늘의 도전)' : ''}`,
+    `RANKUP ${date} · ${game.icon} ${game.name}`,
     `${nf(result.score)}점 · ${delta >= 0 ? '+' : '−'}${Math.abs(delta)} LP · ${t.name} ${nf(after)}`,
     crown ? `🏆 ${crown.name}` : null,
     `오늘의 훈련 ${bar}${state.streak > 0 ? ` · 🔥${state.streak}일` : ''}`,
   ].filter(Boolean).join('\n');
-  try {
-    if (navigator.share) { await navigator.share({ text }); return; }
-    await navigator.clipboard.writeText(text);
-    toast('결과를 복사했어요');
-  } catch { toast('공유를 취소했어요'); }
+  shareToast(await shareText(text));
+}
+
+// 오늘의 도전은 모두가 같은 문제라 점수를 나란히 비교할 수 있다 (Wordle 모델)
+async function shareChallenge(game, result, first) {
+  const d = new Date();
+  const text = [
+    `RANKUP 오늘의 도전 ${d.getMonth() + 1}/${d.getDate()}`,
+    `${game.icon} ${game.name} · ${nf(result.score)}점${first ? '' : ' (연습)'}`,
+    result.detail,
+    '모두가 같은 문제예요. 몇 점 나오나요?',
+  ].join('\n');
+  shareToast(await shareText(text));
+}
+
+// 공유 시트가 떴다면(보냈든 닫았든) 따로 말하지 않는다
+function shareToast(r) {
+  if (r === 'copied') toast('결과를 복사했어요');
+  else if (r === 'failed') toast('이 환경에서는 공유할 수 없어요');
 }
 
 // ---------- 중단 ----------
@@ -1147,7 +1319,7 @@ async function refreshNickname() {
 // 내 점수 한 줄만 보여주고, 순위는 토스 화면에 맡긴다.
 function renderWeekLine() {
   const w = weeklyBucket();
-  $('#wl-score').textContent = `${nf(w.lp)}점`;
+  $('#wl-score').textContent = `${nf(w.pts)}점`;
   const left = untilWeekEnd();
   $('#wl-go').textContent = hasLeaderboard()
     ? '순위 보기 →'
@@ -1215,7 +1387,7 @@ function renderRecords() {
     <div class="sect-head">최근 7일${nickname ? ` · ${nickname}` : ''}</div>
     ${weekChart()}
     <div class="stat-rows" style="margin-top:14px">
-      <div class="stat-row"><span>이번 주 점수${inToss() ? ' (리더보드 제출값)' : ''}</span><span>${nf(w.lp)}</span></div>
+      <div class="stat-row"><span>이번 주 점수${inToss() ? ' (리더보드 제출값)' : ''}</span><span>${nf(w.pts)}</span></div>
       <div class="stat-row"><span>이번 주 판수</span><span>${nf(w.sessions)}판</span></div>
       <div class="stat-row"><span>누적 판수</span><span>${nf(state.totalSessions)}판</span></div>
       <div class="stat-row"><span>연속 기록</span><span>${state.streak > 0 ? state.streak + '일' : '없음'}${state.freeze > 0 ? ` · ❄ 보호권 ${state.freeze}개` : ''}</span></div>
@@ -1347,6 +1519,15 @@ function renderSettings() {
   } else {
     $nick.classList.add('hidden');
   }
+  // 토스에서는 기록이 토스 Storage에 있어 기기를 바꿔도 이어진다. 파일 백업이 필요 없고,
+  // 다운로드는 토스 WebView에서 동작하지도 않는다(심사에서 "안 되는 버튼"이 된다).
+  // 가져오기를 열어 두면 파일을 고쳐 주간 점수를 부풀리는 통로도 된다.
+  const toss = inToss();
+  $('#backup-tools').classList.toggle('hidden', toss);
+  $('#backup-head').textContent = toss ? '기록 보관' : '기록 백업';
+  $('#backup-desc').textContent = toss
+    ? '기록은 토스에 자동으로 저장돼요. 기기를 바꿔도 그대로 이어집니다.'
+    : '기록은 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 랭크가 사라지니 가끔 내보내 두세요.';
   const now = Date.now();
   const played = GAMES.filter(g => state.disc[g.id].sessions > 0).length;
   const lastPlayed = Math.max(0, ...GAMES.map(g => state.disc[g.id].lastPlayed || 0));
@@ -1421,7 +1602,13 @@ $('#btn-import-cancel').addEventListener('click', () => {
 });
 
 $('#btn-import-apply').addEventListener('click', () => {
-  if (!pendingImport) return;
+  if (!pendingImport || inToss()) return;
+  // 주간 점수와 오늘의 도전 기록은 파일에서 받지 않는다 — 고쳐 넣으면 그대로 순위가 된다
+  pendingImport.week = null;
+  if (pendingImport.daily) {
+    delete pendingImport.daily.challenge;
+    delete pendingImport.daily.challengeScore;
+  }
   saveState(pendingImport);
   state = loadState();      // 누락 필드를 채워 다시 읽는다
   applyTheme(state.theme);

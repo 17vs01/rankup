@@ -293,6 +293,8 @@ html.booting #app { visibility: hidden; }
 /* ---------- 결과 · 오늘의 훈련 · 공유 ---------- */
 .result-daily { font-size: 12.5px; color: var(--text-dim); margin-top: 12px; letter-spacing: .04em; }
 .result-daily.done { color: var(--good); font-weight: 700; font-size: 14px; }
+/* 이번 주 점수 — 리더보드에 올라가는 값을 판마다 보여준다 */
+.result-week { font-size: 12.5px; color: var(--accent); margin-top: 10px; letter-spacing: .02em; font-weight: 600; }
 .result-share { margin: 0; font-size: 13px; padding: 12px; }
 .result-next-why { font-size: 11.5px; color: var(--text-faint); margin-top: 10px; }
 
@@ -816,6 +818,16 @@ html.booting #app { visibility: hidden; }
   padding: 15px 18px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px;
 }
 .sc-kicker { font-size: 11px; font-weight: 700; letter-spacing: .14em; color: var(--accent); }
+/* 오늘의 스도쿠 — 매일 여는 판이라 목록보다 위에 둔다 */
+.sd-daily {
+  width: 100%; text-align: left; cursor: pointer; font-family: inherit; color: var(--text);
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--radius);
+  padding: 15px 18px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px;
+}
+.sd-daily:active { background: var(--surface-2); }
+.sd-daily.done { border-color: var(--good); }
+.sd-daily-sub { font-size: 12.5px; color: var(--text-dim); word-break: keep-all; }
+.sd-daily.done .sd-daily-sub { color: var(--good); }
 .sc-desc { font-size: 14.5px; font-weight: 600; }
 .sd-levels { display: flex; flex-direction: column; gap: 8px; }
 .sd-level {
@@ -901,6 +913,13 @@ html.booting #app { visibility: hidden; }
 }
 .sd-badge.on { background: var(--accent); color: var(--on-accent); }
 
+/* 힌트 이유 — 판을 가리지 않게 한 줄로 떴다가 사라진다 */
+.sd-msg {
+  width: 100%; max-width: 350px; min-height: 18px; text-align: center;
+  font-size: 12.5px; line-height: 1.5; color: var(--accent); word-break: keep-all;
+  opacity: 0; transition: opacity .2s;
+}
+.sd-msg.on { opacity: 1; }
 .sd-pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; width: 100%; max-width: 350px; }
 .sd-key {
   background: var(--surface); border: 1px solid var(--line); color: var(--accent);

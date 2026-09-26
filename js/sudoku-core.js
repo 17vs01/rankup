@@ -9,9 +9,10 @@ export function boxOf(spec, r, c) {
   return Math.floor(r / spec.br) * perRow + Math.floor(c / spec.bc);
 }
 
-function shuffle(a) {
+// rng를 받으면 그걸로 섞는다 — 오늘의 스도쿠는 날짜 시드로 모두 같은 판을 만든다
+function shuffle(a, rng = Math.random) {
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -69,7 +70,7 @@ export function countSolutions(spec, grid, limit = 2) {
   return found;
 }
 
-export function solve(spec, grid) {
+export function solve(spec, grid, rng = Math.random) {
   const { n } = spec;
   const g = Int8Array.from(grid);
   const m = makeMasks(spec, g);
@@ -88,7 +89,7 @@ export function solve(spec, grid) {
     }
     if (best === -1) return true;
     const r = (best / n) | 0, c = best % n, b = boxOf(spec, r, c);
-    const vals = shuffle([...Array(n)].map((_, k) => k + 1));
+    const vals = shuffle([...Array(n)].map((_, k) => k + 1), rng);
     for (const v of vals) {
       const bit = 1 << (v - 1);
       if (!(bestCand & bit)) continue;
@@ -101,17 +102,17 @@ export function solve(spec, grid) {
   return rec() ? g : null;
 }
 
-export function fullGrid(spec) {
-  return solve(spec, new Int8Array(spec.n * spec.n));
+export function fullGrid(spec, rng = Math.random) {
+  return solve(spec, new Int8Array(spec.n * spec.n), rng);
 }
 
 // 유일해를 유지하면서 단서를 targetClues까지 걷어낸다.
 // 대칭 제거는 하지 않는다 — 낮은 단서 수를 실제로 달성하는 쪽이 난이도에 정직하다.
-export function generate(spec, targetClues) {
+export function generate(spec, targetClues, rng = Math.random) {
   const { n } = spec;
-  const solution = fullGrid(spec);
+  const solution = fullGrid(spec, rng);
   const puzzle = Int8Array.from(solution);
-  const order = shuffle([...Array(n * n)].map((_, i) => i));
+  const order = shuffle([...Array(n * n)].map((_, i) => i), rng);
   let clues = n * n;
   for (const i of order) {
     if (clues <= targetClues) break;
@@ -125,6 +126,8 @@ export function generate(spec, targetClues) {
 
 // 현재 판에서 "값이 하나로 확정되는" 칸을 찾는다.
 // naked single(후보가 하나) + hidden single(줄/박스에서 그 값이 놓일 자리가 하나)
+// 각 항목에 why = { kind: 'naked' } 또는 { kind: 'hidden', unit: 'row'|'col'|'box', no }를
+// 붙인다. 힌트가 "왜 여기가 이 숫자인지"를 말해줘야 다음엔 혼자 찾는다.
 export function findSingles(spec, grid) {
   const { n } = spec;
   const m = makeMasks(spec, grid);
@@ -138,24 +141,26 @@ export function findSingles(spec, grid) {
     const r = (i / n) | 0, c = i % n;
     const cand = full & ~(m.row[r] | m.col[c] | m.box[boxOf(spec, r, c)]);
     if (cand && (cand & (cand - 1)) === 0) {
-      out.push({ idx: i, val: Math.log2(cand) + 1 });
+      out.push({ idx: i, val: Math.log2(cand) + 1, why: { kind: 'naked' } });
       taken.add(i);
     }
   }
 
   // hidden single (행/열/박스 각 유닛에서 어떤 값이 딱 한 자리만 가능)
   const units = [];
-  for (let r = 0; r < n; r++) units.push([...Array(n)].map((_, c) => r * n + c));
-  for (let c = 0; c < n; c++) units.push([...Array(n)].map((_, r) => r * n + c));
+  const unitWhy = [];
+  for (let r = 0; r < n; r++) { units.push([...Array(n)].map((_, c) => r * n + c)); unitWhy.push({ unit: 'row', no: r + 1 }); }
+  for (let c = 0; c < n; c++) { units.push([...Array(n)].map((_, r) => r * n + c)); unitWhy.push({ unit: 'col', no: c + 1 }); }
   const perRow = n / spec.bc;
   for (let b = 0; b < n; b++) {
     const r0 = Math.floor(b / perRow) * spec.br, c0 = (b % perRow) * spec.bc;
     const u = [];
     for (let dr = 0; dr < spec.br; dr++) for (let dc = 0; dc < spec.bc; dc++) u.push((r0 + dr) * n + c0 + dc);
     units.push(u);
+    unitWhy.push({ unit: 'box', no: b + 1 });
   }
 
-  for (const u of units) {
+  units.forEach((u, ui) => {
     for (let v = 1; v <= n; v++) {
       const bit = 1 << (v - 1);
       let spot = -1, count = 0, already = false;
@@ -167,11 +172,11 @@ export function findSingles(spec, grid) {
         if (cand & bit) { spot = i; count++; if (count > 1) break; }
       }
       if (!already && count === 1 && !taken.has(spot)) {
-        out.push({ idx: spot, val: v });
+        out.push({ idx: spot, val: v, why: { kind: 'hidden', ...unitWhy[ui] } });
         taken.add(spot);
       }
     }
-  }
+  });
   return out;
 }
 

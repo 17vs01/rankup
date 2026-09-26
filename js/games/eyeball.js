@@ -121,9 +121,12 @@ export const eyeballGame = {
       },
       function area() {
         const pct = ri(10, 90);
-        const rA = 110, rB = Math.round(rA * Math.sqrt(pct / 100));
-        const base = `<circle cx="105" cy="150" r="${rA}" fill="var(--text-dim)"/>
-            <circle cx="215" cy="215" r="${rB}" fill="var(--accent)"/>`;
+        // 두 원이 화면(300×300) 안에 온전히, 겹치지 않고 들어가야 한다.
+        // 예전 배치(r=110, 작은 원은 오른쪽 아래)는 비율이 62%를 넘으면 작은 원이
+        // 화면 밖으로 잘려서 실제보다 작아 보였다 — 넓이 문제의 3분의 1이 그랬다.
+        const rA = 72, rB = Math.round(rA * Math.sqrt(pct / 100));
+        const base = `<circle cx="76" cy="150" r="${rA}" fill="var(--text-dim)"/>
+            <circle cx="226" cy="150" r="${rB}" fill="var(--accent)"/>`;
         return {
           prompt: '작은 원의 넓이는 큰 원의 몇 %?',
           svg: `<svg viewBox="0 0 300 300">${base}</svg>`,
@@ -132,8 +135,8 @@ export const eyeballGame = {
           review(guess) {
             const rG = (rA * Math.sqrt(Math.max(0, guess) / 100)).toFixed(1);
             return `<svg viewBox="0 0 300 300">${base}
-              <circle cx="215" cy="215" r="${rB}" fill="none" stroke="var(--good)" stroke-width="3"/>
-              <circle cx="215" cy="215" r="${rG}" fill="none" stroke="var(--bad)" stroke-width="3" stroke-dasharray="7 5"/>
+              <circle cx="226" cy="150" r="${rB}" fill="none" stroke="var(--good)" stroke-width="3"/>
+              <circle cx="226" cy="150" r="${rG}" fill="none" stroke="var(--bad)" stroke-width="3" stroke-dasharray="7 5"/>
               <text x="150" y="292" text-anchor="middle" font-size="19" fill="var(--text-dim)">
                 정답 ${pct}% · 내 답 ${guess}%</text>
             </svg>`;

@@ -113,7 +113,7 @@ function freshState() {
     korvocab: {},       // 같은 구조 (한국어)
     sudoku: null,       // 진행 중인 스도쿠 판 (이어하기)
     // 스도쿠 별관 진행. 랭크와 완전히 분리된 자체 해금·기록.
-    sudokuProg: { unlocked: 1, recs: {}, plays: 0, clears: 0 },
+    sudokuProg: { unlocked: 1, recs: {}, plays: 0, clears: 0, perfect: {}, daily: {} },
     theme: 'onyx',      // 화면 테마
     sound: 1,           // 소리 (토스 심사 항목 — 사용자가 끌 수 있어야 한다)
     haptic: 1,          // 진동
@@ -126,7 +126,7 @@ function freshState() {
     freeze: 0,          // 스트릭 보호권 (7일 연속마다 +1, 최대 2)
     freezeAt: 0,        // 마지막으로 보호권을 준 스트릭 값 (중복 지급 방지)
     daily: null,        // 오늘의 훈련 { day, ids[], done[] }
-    week: null,         // 이번 주 { key, lp, sessions }
+    week: null,         // 이번 주 { key, pts, sessions } — 판마다 성적 점수(main.js weekPointsFor)
     onboarded: 0,       // 첫 실행 안내를 봤는가
     history: [],        // 최근 세션 기록 (최대 120)
   };
@@ -188,6 +188,10 @@ export function loadState() {
   sp.plays = num(sp.plays, 0);
   sp.clears = num(sp.clears, 0);
   if (!sp.recs || typeof sp.recs !== 'object') sp.recs = {};
+  // 실수·힌트 없이 완성한 난이도 (별관 목록에 ★)
+  if (!sp.perfect || typeof sp.perfect !== 'object') sp.perfect = {};
+  // 오늘의 스도쿠 기록: 날짜 → { sec, mistakes, hints }. 최근 것만 남긴다.
+  if (!sp.daily || typeof sp.daily !== 'object') sp.daily = {};
   if (s.disc) delete s.disc.sudoku;   // 랭크 목록에서 완전히 뺀다
   for (const id of DISC_IDS) {
     if (!s.disc[id]) s.disc[id] = freshDisc();
@@ -274,7 +278,12 @@ export function loadState() {
   if (s.daily && (typeof s.daily !== 'object' || !Array.isArray(s.daily.ids))) s.daily = null;
   if (s.daily && !Array.isArray(s.daily.done)) s.daily.done = [];
   if (s.week && (typeof s.week !== 'object' || typeof s.week.key !== 'string')) s.week = null;
-  if (s.week) { s.week.lp = num(s.week.lp, 0); s.week.sessions = num(s.week.sessions, 0); }
+  // 예전 주간 값(lp = 딴 LP 합)은 공식이 달라 섞을 수 없다. 그 주는 0점에서 다시 센다.
+  if (s.week) {
+    s.week.pts = num(s.week.pts, 0);
+    s.week.sessions = num(s.week.sessions, 0);
+    delete s.week.lp;
+  }
   return s;
 }
 
@@ -343,10 +352,29 @@ export function touchStreak(s) {
 
 // 스도쿠 별관 한 판 기록. LP·부식·리그와 무관하고 해금과 최단 기록만 다룬다.
 // 반환: { isNew, prev, unlockedName } — 신기록 여부와 이번에 열린 난이도
-export function recordSudoku(s, levelName, { solved, sec }) {
+export function recordSudoku(s, levelName, { solved, sec, mistakes = 0, hints = 0, day = null }) {
   const p = s.sudokuProg;
   p.plays++;
-  let isNew = false, prev, unlockedName = null;
+  let isNew = false, prev, unlockedName = null, firstPerfect = false;
+  const perfect = solved && mistakes === 0 && hints === 0;
+
+  // 오늘의 스도쿠는 해금·난이도 기록과 따로 센다 (모두 같은 판이라 날짜별 기록이 의미 있다)
+  if (day) {
+    if (solved) {
+      p.clears++;
+      prev = p.daily[day] ? p.daily[day].sec : undefined;
+      if (prev === undefined || sec < prev) { p.daily[day] = { sec, mistakes, hints }; isNew = true; }
+      const keys = Object.keys(p.daily);
+      if (keys.length > 60) {   // 두 달 치만 남긴다
+        keys.sort((a, b) => dayOrder(a) - dayOrder(b)).slice(0, keys.length - 60).forEach(k => delete p.daily[k]);
+      }
+    }
+    touchStreak(s);
+    saveState(s);
+    return { isNew, prev, unlockedName, perfect, firstPerfect };
+  }
+
+  if (perfect && !p.perfect[levelName]) { p.perfect[levelName] = 1; firstPerfect = true; }
   if (solved) {
     p.clears++;
     prev = p.recs[levelName];
@@ -360,7 +388,13 @@ export function recordSudoku(s, levelName, { solved, sec }) {
   }
   touchStreak(s);
   saveState(s);
-  return { isNew, prev, unlockedName };
+  return { isNew, prev, unlockedName, perfect, firstPerfect };
+}
+
+// 'YYYY-M-D' → 정렬용 숫자
+function dayOrder(k) {
+  const [y, m, d] = k.split('-').map(Number);
+  return y * 10000 + m * 100 + d;
 }
 
 // 세션 종료 기록. 레이팅은 이번에 고른 조합(variantKey)에만 붙는다.

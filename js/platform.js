@@ -64,8 +64,8 @@ export async function getUserKey() {
 
 // ---------- 점수 제출 ----------
 // 토스 리더보드는 미니앱당 하나뿐이다. 처음엔 전 종목 평균(종합 점수)을 올렸는데,
-// 평생 누적이라 상위권이 고착돼 새 유저가 포기한다. 지금은 "이번 주에 딴 LP"를
-// 올린다 (main.js의 weeklyScore). 월요일 새벽 4시에 리셋된다.
+// 평생 누적이라 상위권이 고착돼 새 유저가 포기한다. 지금은 "이번 주 점수"(판마다 성적)를
+// 올린다 (main.js의 weekPointsFor · weeklyScore). 월요일 새벽 4시에 리셋된다.
 
 /** 점수를 토스 리더보드에 올린다. 토스 밖에서는 아무것도 안 한다. */
 export async function submitScore(value) {
@@ -89,6 +89,24 @@ export async function openLeaderboard() {
 }
 
 export function hasLeaderboard() { return !!sdk?.Game?.openLeaderboard; }
+
+// ---------- 공유 ----------
+// 토스 WebView에는 navigator.share가 없을 수 있고, 클립보드도 막혀 있을 수 있다.
+// 토스에서는 SDK 공유 시트를 쓴다. 밖에서는 Web Share → 클립보드 순으로 떨어진다.
+// 돌려주는 값: 'shared' | 'copied' | 'cancelled' | 'failed'
+// (예전에는 실패도 전부 "공유를 취소했어요"로 뭉뚱그려 사용자를 헷갈리게 했다)
+export async function shareText(text) {
+  if (sdk?.Share?.sendMessage) {
+    try { await sdk.Share.sendMessage({ message: text }); return 'shared'; }
+    catch { /* 아래로 */ }
+  }
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try { await navigator.share({ text }); return 'shared'; }
+    catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
+  }
+  try { await navigator.clipboard.writeText(text); return 'copied'; }
+  catch { return 'failed'; }
+}
 
 // ---------- 화면 고정 ----------
 // 세로 전용으로 만든 화면이라 가로로 눕히면 게임판이 깨진다. 토스에서는 방향을
