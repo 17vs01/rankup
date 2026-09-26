@@ -1,5 +1,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* 버튼 글자색은 브라우저 기본값이 검정이다. 카드형 버튼(오늘의 훈련·오늘의 도전·이어서 하기·
+   이번 주·별관·테마)은 color를 따로 안 줘서 어두운 테마에서 글자가 검정으로 찍혀 안 보였다.
+   버튼은 무조건 부모 글자색을 물려받게 한다. 색을 직접 정한 버튼(btn-primary 등)은 그대로다. */
+button { color: inherit; }
+
 /* 색은 딱 세 종류만 쓴다 — 배경(무채색), 글자(무채색), 강조(하나).
    원색이 여러 개 섞이면 화면이 시끄러워지고, 어디를 봐야 할지 알기 어려워진다.
 
@@ -272,7 +277,10 @@ html.booting #app { visibility: hidden; }
   display: flex; flex-direction: column; gap: 3px;
   transition: opacity .2s;
 }
-.challenge.done { opacity: .55; }
+/* 오늘 몫을 쓴 도전은 카드를 흐리게 하지 않는다 — 어두운 테마에서 이름이 묻힌다. 테두리와 이름만 낮춘다 */
+.challenge.done { background: var(--surface); border-color: var(--line-2); }
+.challenge.done .ch-name { color: var(--text-dim); }
+.challenge.done::after { color: var(--text-faint); }
 .challenge::after {
   content: '→'; position: absolute; right: 16px; top: 50%;
   transform: translateY(-50%); color: var(--accent); font-size: 15px;
