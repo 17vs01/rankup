@@ -123,6 +123,19 @@ html, body {
 /* 저장소(토스 Storage)를 읽는 동안은 가려 둔다.
    안 그러면 밝은 테마 사용자에게 어두운 기본 화면이 한 번 번쩍인다. */
 html.booting #app { visibility: hidden; }
+/* 본체가 끝내 못 떴을 때의 안내 (index.html의 인라인 스크립트가 붙인다) */
+.boot-fail {
+  position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: var(--bg); color: var(--text); text-align: center;
+}
+.boot-fail-box { max-width: 300px; }
+.boot-fail-box b { font-size: 16px; }
+.boot-fail-box p { font-size: 13px; line-height: 1.7; color: var(--text-dim); margin: 10px 0 18px; word-break: keep-all; }
+.boot-fail-box button {
+  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  padding: 12px 20px; border-radius: 12px; border: 1px solid var(--accent);
+  background: var(--accent-soft); color: var(--accent);
+}
 
 .screen {
   display: none;

@@ -134,6 +134,9 @@ $('#home-scroll').addEventListener('scroll', updateScrollHint, { passive: true }
 window.addEventListener('resize', updateScrollHint);
 
 function renderHome() {
+  // 홈에 돌아왔으면 "오늘의 도전을 하려던 참"은 끝난 것이다. 방법 화면에서 기기 뒤로가기로
+  // 나오면 이 표시가 남아서, 그 뒤 다른 종목을 ?로 시작하면 그 종목이 도전으로 처리됐다.
+  pendingDaily = false;
   const decayed = applyDecay(state);
   const now = Date.now();
 
@@ -401,14 +404,20 @@ function markDaily(gameId) {
 // 예전에는 "이번 주에 딴 LP의 합"이었는데 두 가지가 틀렸다.
 //  - 실력대로 꾸준히 하면 레이팅이 균형점에 머물러 판당 +2~3밖에 안 쌓인다
 //  - 잃은 LP를 빼지 않으니, 일부러 한 판 망치고(−24) 그걸 되찾으면 전부 점수가 됐다
-// 지금은 판마다 성적(perf) 자체를 점수로 준다. 기대만큼 하면 10점, 최대 20점.
+// 지금은 판마다 성적(perf)을 점수로 준다. 기대만큼 하면 10점, 최대 20점.
 // perf는 내 레이팅에 맞춘 난이도 대비 성적이라, 일부러 망치면 그 판이 0점이고
 // 레이팅이 조금 내려가 봤자 다음 판이 거의 안 쉬워진다 — 손해만 본다.
+//
+// 기대의 절반(perf 0.5) 이하는 0점이다. perf에 그대로 비례시키면 문제를 안 읽고 찍어도
+// 점수가 나온다 — 함정 퀴즈는 찍으면 몇 초에 4점이라, 분당 점수가 제대로 푸는 사람보다
+// 높았다. 0.5에서 0점, 1.0에서 10점, 1.5 이상에서 20점으로 잇는다.
 const WEEK_PTS_PER_GAME = 10;
 const WEEK_PTS_MAX = 20;
+const WEEK_PERF_FLOOR = 0.5;
 function weekPointsFor(perf) {
   const p = Number.isFinite(perf) ? perf : 0;
-  return Math.round(WEEK_PTS_PER_GAME * Math.max(0, Math.min(WEEK_PTS_MAX / WEEK_PTS_PER_GAME, p)));
+  const pts = WEEK_PTS_PER_GAME * (p - WEEK_PERF_FLOOR) / (1 - WEEK_PERF_FLOOR);
+  return Math.round(Math.max(0, Math.min(WEEK_PTS_MAX, pts)));
 }
 function weekKeyOf(t = Date.now()) {
   const d = new Date(t);
@@ -515,10 +524,15 @@ function hidePause() { $('#pause').classList.add('hidden'); }
 function countdownResume() {
   $('#btn-pause-resume').classList.add('hidden');
   const $c = $('#pause-count');
+  const token = sessionToken;   // 세는 사이에 판이 끝나거나 바뀌면 그만둔다
   let n = 3;
   $c.textContent = n;
   // 판의 시계는 아직 멈춰 있으므로 이 카운트다운만은 생 setTimeout으로 센다
   const step = () => {
+    if (token !== sessionToken || !pausedAt) return;
+    // 세는 도중에 다시 백그라운드로 갔으면 재개하지 않는다. 예전에는 그대로 재개해서
+    // 화면이 안 보이는 동안 판이 흘렀다. 처음 멈춘 화면으로 되돌린다.
+    if (document.hidden) { showPause(); return; }
     n--;
     if (n > 0) { $c.textContent = n; setTimeout(step, 700); return; }
     hidePause();
@@ -798,13 +812,20 @@ function variantKeyOf(game) {
   return null;
 }
 
+// 사용자가 넣었거나 파일에서 온 글자를 화면(innerHTML)에 넣기 전에 거친다
+function esc(v) {
+  return String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// 모르는 조합 키는 키 글자를 그대로 이름으로 쓴다. 그 키는 백업 파일에서 올 수 있으므로
+// 여기서 한 번 거른다 (이 이름은 여러 화면에 HTML로 들어간다).
 function variantLabelOf(game, key) {
-  if (game.variantLabel) return game.variantLabel(key);
+  if (game.variantLabel) return esc(game.variantLabel(key));
   if (game.modes) {
     const m = game.modes.find(x => x.id === key);
     if (m) return m.name;
   }
-  return key;
+  return esc(key);
 }
 
 // 지금 가진 칭호 중 대표 하나 (홈 상단·기록 화면에 자랑용으로 띄운다)
@@ -1384,7 +1405,7 @@ function renderRecords() {
       : '<p class="sect-desc" style="margin:0">종목 하나를 골드(1400 LP)까지 올리면 첫 칭호가 붙습니다.</p>'}
   </div>`);
   sects.push(`<div class="sect">
-    <div class="sect-head">최근 7일${nickname ? ` · ${nickname}` : ''}</div>
+    <div class="sect-head">최근 7일${nickname ? ` · ${esc(nickname)}` : ''}</div>
     ${weekChart()}
     <div class="stat-rows" style="margin-top:14px">
       <div class="stat-row"><span>이번 주 점수${inToss() ? ' (리더보드 제출값)' : ''}</span><span>${nf(w.pts)}</span></div>
@@ -1443,7 +1464,13 @@ function renderRecords() {
   if (sp.plays > 0) {
     const rows = SUDOKU_LEVELS
       .filter(l => sp.recs[l.name] !== undefined)
-      .map(l => `<div class="stat-row"><span>${l.name} 최단</span><span>${fmtDur(sp.recs[l.name], 'sec')}</span></div>`);
+      .map(l => `<div class="stat-row"><span>${l.name} 최단${sp.perfect[l.name] ? ' ★' : ''}</span><span>${fmtDur(sp.recs[l.name], 'sec')}</span></div>`);
+    // 오늘의 스도쿠: 완성한 날 수와 그중 가장 빨랐던 기록
+    const dailySecs = Object.values(sp.daily).map(v => v.sec);
+    if (dailySecs.length) {
+      rows.push(`<div class="stat-row"><span>오늘의 스도쿠 완성</span><span>${nf(dailySecs.length)}일</span></div>`);
+      rows.push(`<div class="stat-row"><span>오늘의 스도쿠 최단</span><span>${fmtDur(Math.min(...dailySecs), 'sec')}</span></div>`);
+    }
     sects.push(`<div class="sect">
       <div class="sect-head">🔢 스도쿠 · ${nf(sp.plays)}판 <span class="sect-tag">랭크 밖</span></div>
       <div class="stat-rows">

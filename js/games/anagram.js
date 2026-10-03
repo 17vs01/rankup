@@ -11,7 +11,8 @@ let R = Math.random;
 
 const DURATION = 60;
 // 뜻을 읽고 단어를 "떠올린 뒤" 음절을 조립해야 해서 어휘력보다 한 문제가 길다
-const EXPECTED = 6;
+// 2글자 단어를 뺀 뒤로 한 문제가 조금 더 걸린다. 기대치를 6 → 5로 맞춘다.
+const EXPECTED = 5;
 
 const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
 const shuffle = a => {
@@ -22,8 +23,10 @@ const shuffle = a => {
 
 // 한글 음절만, 2~5글자. 띄어쓰기가 있는 관용구는 뺀다 (타일이 너무 많아진다).
 const HANGUL = /^[가-힣]+$/;
+// 3~5글자만. 2글자는 타일이 둘뿐이라 섞인 순서를 뒤집기만 하면 된다 — 뜻을 안 읽어도
+// 풀리는 문제가 전체의 31~44%였다. 음절이 전부 같은 말("남남")도 섞을 수가 없어 뺀다.
 function usable(v) {
-  return HANGUL.test(v.w) && v.w.length >= 2 && v.w.length <= 5;
+  return HANGUL.test(v.w) && v.w.length >= 3 && v.w.length <= 5 && new Set(v.w).size > 1;
 }
 
 function mainTier(rating) {
@@ -39,7 +42,7 @@ export const anagramGame = {
     R = ctx.rng || Math.random;
     const tier = mainTier(ctx.rating);
     // 레벨이 오르면 긴 단어 위주로
-    const minLen = ctx.rating >= 1500 ? 3 : 2;
+    const minLen = 3;
 
     const pool = [];
     KOR_VOCAB.forEach((v, i) => {

@@ -132,9 +132,56 @@ function freshState() {
   };
 }
 
+// 어떤 저장본이 와도 앱은 떠야 한다. 손으로 고친 백업 파일, 중간에 끊긴 쓰기, 옛 버전 —
+// 모양이 틀린 부분은 버리고, 그래도 안 되면 새 상태로 시작한다.
+// (예전에는 조합 하나가 null이기만 해도 여기서 예외가 나서, 그 저장본이 남아 있는 한
+//  앱을 열 때마다 죽었다)
 export function loadState() {
   let s;
   try { s = raw == null ? null : JSON.parse(raw); } catch { s = null; }
+  try { return normalize(sanitize(s)); }
+  catch {
+    // 새 상태로 시작하면 곧 저장이 일어나 원본을 덮어쓴다. 되살릴 길은 남겨 둔다.
+    if (raw != null) storage.set(KEY + '-unreadable', raw).catch(() => {});
+    return normalize(null);
+  }
+}
+
+const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const arr81 = a => Array.isArray(a) && a.length === 81;
+
+// 모양이 틀린 덩어리를 걷어낸다. 값의 범위는 normalize가 보정한다.
+function sanitize(s) {
+  if (!isObj(s) || !isObj(s.disc)) return null;
+  for (const [id, d] of Object.entries(s.disc)) {
+    if (!isObj(d)) { delete s.disc[id]; continue; }
+    if (d.variants !== undefined && !isObj(d.variants)) d.variants = {};
+    for (const [k, v] of Object.entries(d.variants || {})) if (!isObj(v)) delete d.variants[k];
+    if (d.records !== undefined && !isObj(d.records)) d.records = {};
+  }
+  for (const k of ['vocab', 'korvocab', 'seenRules', 'modes', 'trapSeen']) {
+    if (s[k] !== undefined && !isObj(s[k])) s[k] = {};
+  }
+  // 기록 화면이 항목마다 t·discId·delta를 읽는다 — 하나라도 깨져 있으면 화면이 죽는다
+  if (Array.isArray(s.history)) {
+    s.history = s.history.filter(h => isObj(h) && Number.isFinite(h.t)
+      && typeof h.discId === 'string' && Number.isFinite(h.delta));
+  }
+  if (isObj(s.daily)) {
+    if (Array.isArray(s.daily.ids)) s.daily.ids = s.daily.ids.filter(x => typeof x === 'string');
+    if (Array.isArray(s.daily.done)) s.daily.done = s.daily.done.filter(x => typeof x === 'string');
+    if (!isObj(s.daily.vars)) s.daily.vars = {};
+  }
+  // 스도쿠 진행판: 칸 수가 안 맞으면 "이어하기"가 깨진 판을 연다. 통째로 버린다.
+  const sd = s.sudoku;
+  if (sd != null && !(isObj(sd) && typeof sd.level === 'string'
+    && arr81(sd.given) && arr81(sd.solution) && arr81(sd.grid)
+    && arr81(sd.notes) && sd.notes.every(Array.isArray))) s.sudoku = null;
+  if (s.sudokuProg !== undefined && !isObj(s.sudokuProg)) delete s.sudokuProg;
+  return s;
+}
+
+function normalize(s) {
   if (!s || !s.disc) s = freshState();
   // 이관: 어휘(vocab) + 우리말(korvocab) → 어휘력(lexi)으로 통합.
   // 기존 두 종목의 LP를 판수 가중 평균으로 물려받는다. 라이트너 데이터
@@ -187,11 +234,14 @@ export function loadState() {
   sp.unlocked = Math.max(1, Math.min(SUDOKU_ORDER.length, num(sp.unlocked, 1)));
   sp.plays = num(sp.plays, 0);
   sp.clears = num(sp.clears, 0);
-  if (!sp.recs || typeof sp.recs !== 'object') sp.recs = {};
+  if (!isObj(sp.recs)) sp.recs = {};
   // 실수·힌트 없이 완성한 난이도 (별관 목록에 ★)
-  if (!sp.perfect || typeof sp.perfect !== 'object') sp.perfect = {};
+  if (!isObj(sp.perfect)) sp.perfect = {};
   // 오늘의 스도쿠 기록: 날짜 → { sec, mistakes, hints }. 최근 것만 남긴다.
-  if (!sp.daily || typeof sp.daily !== 'object') sp.daily = {};
+  if (!isObj(sp.daily)) sp.daily = {};
+  for (const [k, v] of Object.entries(sp.daily)) {
+    if (!isObj(v) || !Number.isFinite(v.sec)) delete sp.daily[k];
+  }
   if (s.disc) delete s.disc.sudoku;   // 랭크 목록에서 완전히 뺀다
   for (const id of DISC_IDS) {
     if (!s.disc[id]) s.disc[id] = freshDisc();

@@ -129,10 +129,15 @@ export function onBack(handler) {
 
   if (sdk?.graniteEvent?.addEventListener) {
     // 토스 안: 시스템 뒤로가기를 구독한다.
-    // 토스는 "처리했다"는 반환값을 보지 않는다 — 핸들러가 화면을 되돌리는 것으로 끝낸다.
+    // 구독하는 순간 토스의 기본 뒤로가기는 차단된다 (문서: "기본 뒤로가기는 차단돼요").
+    // 그래서 핸들러가 "내가 처리 안 했다"(false)고 하면 우리가 직접 닫아야 한다.
+    // 예전에는 반환값을 버려서, 홈에서 뒤로가기를 아무리 눌러도 앱을 나갈 수 없었다.
     try {
       sdk.graniteEvent.addEventListener('backEvent', {
-        onEvent: () => { if (backHandler) backHandler(); },
+        onEvent: () => {
+          const handled = backHandler ? backHandler() : false;
+          if (!handled) closeApp();
+        },
         onError: () => { /* 구독이 끊겨도 앱은 계속 돈다 */ },
       });
       return;
@@ -148,6 +153,11 @@ export function onBack(handler) {
       if (handled) history.pushState({ rankup: 1 }, '');
     });
   } catch { /* history를 못 쓰는 환경이면 뒤로가기는 기본 동작 */ }
+}
+
+/** 미니앱을 닫는다 (토스 안에서만 의미가 있다) */
+export function closeApp() {
+  try { sdk?.Screen?.close?.(); } catch { /* 닫기 실패는 어쩔 수 없다 */ }
 }
 
 // ---------- 진동(햅틱) ----------

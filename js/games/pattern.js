@@ -80,14 +80,40 @@ function genInterleave(L) {     // 두 수열이 번갈아
   return { seq, ans: b + 2 * db, rule: `두 수열이 번갈아 (+${da} / +${db})` };
 }
 
+// 보이는 항들을 다른 흔한 규칙으로 읽었을 때 나오는 "다음 수"들.
+// 2·3·5·8은 "+1, +2, +3"(다음 12)이면서 "앞 두 수의 합"(다음 13)이기도 하다.
+// 이런 수열은 정답이 둘이라, 13을 고른 사람을 틀렸다고 할 수 없다.
+function otherReadings(seq) {
+  const out = new Set();
+  const n = seq.length;
+  const d = seq.slice(1).map((v, i) => v - seq[i]);
+  if (d.every(x => x === d[0])) out.add(seq[n - 1] + d[0]);                                  // 등차
+  if (seq.every(v => v !== 0)) {
+    const r = seq[1] / seq[0];
+    if (seq.every((v, i) => !i || Math.abs(v / seq[i - 1] - r) < 1e-9)) out.add(seq[n - 1] * r);   // 등비
+  }
+  const dd = d.slice(1).map((v, i) => v - d[i]);
+  if (dd.length >= 2 && dd.every(x => x === dd[0])) out.add(seq[n - 1] + d[d.length - 1] + dd[0]); // 커지는 덧셈
+  if (n >= 4 && seq.slice(2).every((v, i) => v === seq[i] + seq[i + 1])) out.add(seq[n - 1] + seq[n - 2]); // 앞 두 수의 합
+  if (d.length >= 3 && d[0] === d[2]) out.add(seq[n - 1] + d[1]);                             // 번갈아 더하기
+  if (d.length >= 3 && d[0] !== 0 && d[1] !== 0 && Math.abs(d[2] / d[1] - d[1] / d[0]) < 1e-9) {
+    out.add(seq[n - 1] + d[2] * (d[1] / d[0]));                                              // 차이가 등비
+  }
+  return out;
+}
+
 function genPuzzle(L) {
   const pool = [genArith, genGeo, genAlt];
   if (L >= 1) pool.push(genAccel, genFib);
   if (L >= 2) pool.push(genSquare);
   if (L >= 3) pool.push(genMulAdd, genInterleave);
-  for (let t = 0; t < 20; t++) {
+  for (let t = 0; t < 40; t++) {
     const p = pick(pool)(L);
-    if (p.ans <= 999 && p.seq.every(v => v >= 0 && v <= 999)) return p;
+    if (!(p.ans <= 999 && p.seq.every(v => v >= 0 && v <= 999))) continue;
+    // 다른 규칙으로 읽어도 같은 답이 나와야 한다 (정답이 하나뿐인 수열만 낸다)
+    const alt = otherReadings(p.seq);
+    alt.delete(p.ans);
+    if (alt.size === 0) return p;
   }
   return genArith(0);
 }

@@ -9,7 +9,8 @@ import { comboTick } from '../feedback.js';
 let R = Math.random;
 
 const DURATION = 60;
-const EXPECTED = 14;
+// 오답 벌점이 1이라(아래 perf 참고) 예전(0.5)보다 순점수가 조금 낮게 나온다. 기대치도 그만큼 내린다.
+const EXPECTED = 13;
 
 const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
 const pick = arr => arr[ri(0, arr.length - 1)];
@@ -150,7 +151,10 @@ export const compareGame = {
     ctx.timer(DURATION, () => {
       if (bar) { bar.stop(); bar = null; }
       locked = true;
-      const perf = (correct - (wrong + timeout) * 0.5) / EXPECTED;
+      // 보기가 둘이라 찍어도 절반은 맞는다. 오답 벌점이 0.5면 찍기의 기대값이 +0.25라서,
+      // 문제를 안 읽고 한쪽만 연타해도 LP가 올랐다 (정답 42 · 오답 54로 +2 LP).
+      // 오답은 정답 하나를 그대로 깎아 찍기의 기대값을 0으로 만든다. 시간 초과는 찍은 게 아니니 0.5.
+      const perf = (correct - wrong - timeout * 0.5) / EXPECTED;
       ctx.finish({
         score: correct,
         perf,

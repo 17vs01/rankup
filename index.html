@@ -322,6 +322,20 @@
 </div>
 <script type="module" src="js/main.js"></script>
 <script>
+// 본체가 못 뜨면(배포 직후 파일 버전이 섞였거나 네트워크가 끊겼을 때) 빈 화면에 가두지 않는다.
+// 화면을 가리는 booting 표시는 본체가 떠야 풀리므로, 한참 지나도 그대로면 여기서 알려준다.
+setTimeout(function () {
+  var h = document.documentElement;
+  if (!h.classList.contains('booting')) return;
+  var d = document.createElement('div');
+  d.className = 'boot-fail';
+  d.innerHTML = '<div class="boot-fail-box"><b>앱을 불러오지 못했어요</b>'
+    + '<p>방금 업데이트됐거나 연결이 불안정할 수 있어요. 잠시 뒤 다시 열어 주세요.</p>'
+    + '<button onclick="location.reload()">다시 불러오기</button></div>';
+  document.body.appendChild(d);
+}, 7000);
+</script>
+<script>
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(reg => {
     // 캐시가 비어 있으면 채워달라고 요청한다. 스크립트가 안 바뀌면 install이

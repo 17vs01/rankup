@@ -16,9 +16,16 @@ export const memoryGame = {
     const d = ctx.state.disc.memory;
     // 오늘의 도전은 모두 같은 판이어야 하니 내 기록이 아니라 고정 레이팅에서 시작한다
     const bestCells = ctx.daily ? null : (d.records && d.records.memory_cells);
+    // 이 레이팅이면 이만큼은 해야 본전인 칸수. 성과(perf)는 반드시 이 값에 견준다.
+    // 예전에는 "내 최고 기록 − 1"에 견줬는데, 기록은 내려가지 않으니 균형점이 없었다 —
+    // 늘 7칸 하는 사람은 판마다 LP가 올라 끝없이 오르고, 운 좋게 10칸을 한 번 찍은
+    // 사람은 그 뒤로 영영 기대에 못 미쳐 바닥까지 떨어졌다.
+    const expect = Math.max(4, 4 + (ctx.rating - 800) / 150);
+    // 시작은 기록 근처에서 (매 판 자기 한계에 도전). 다만 기대치보다 한참 위에서 시작하면
+    // 6라운드를 실패로만 보내므로 기대치 +1칸까지만 올려 잡는다.
     const k0 = bestCells
-      ? Math.max(3, bestCells - 1)
-      : Math.max(3, Math.round(4 + (ctx.rating - 800) / 150));
+      ? Math.max(3, Math.min(bestCells - 1, Math.round(expect) + 1))
+      : Math.max(3, Math.round(expect));
     let k = k0;
     let round = 0;
     const successKs = [];
@@ -117,8 +124,8 @@ export const memoryGame = {
 
     function end() {
       const secs = elapsed();
-      const ability = maxSuccess > 0 ? maxSuccess : k0 - 1.5;
-      const perf = ability / Math.max(k0, 4);
+      // 한 번도 못 맞힌 판은 기대의 40%로 친다 (예전 식은 전부 실패해도 70%가 나왔다)
+      const perf = maxSuccess > 0 ? maxSuccess / expect : 0.4;
       ctx.finish({
         score: maxSuccess,
         perf,

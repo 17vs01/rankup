@@ -1,5 +1,5 @@
 // 오프라인 캐시 서비스워커
-const CACHE = 'rankup-v41';   // 배포마다 올린다 — 안 올리면 캐시된 옛 화면이 계속 뜬다
+const CACHE = 'rankup-v42';   // 배포마다 올린다 — 안 올리면 캐시된 옛 화면이 계속 뜬다
 const ASSETS = [
   '.',
   'index.html',
@@ -86,10 +86,15 @@ self.addEventListener('message', e => {
 });
 
 // 네트워크 우선, 실패 시 캐시 (업데이트 반영 + 오프라인 동작)
+//
+// 우리 파일은 브라우저 HTTP 캐시를 건너뛰고 서버에 매번 확인한다(no-cache = 조건부 요청).
+// GitHub Pages가 파일마다 10분씩 캐시하게 해서, 배포 직후에는 새 main.js와 옛 storage.js가
+// 섞여 로드될 수 있었다. 모듈 하나라도 짝이 안 맞으면 import 오류로 앱이 통째로 안 뜬다.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  const sameOrigin = new URL(e.request.url).origin === self.location.origin;
   e.respondWith(
-    fetch(e.request)
+    (sameOrigin ? fetch(e.request.url, { cache: 'no-cache' }) : fetch(e.request))
       .then(res => {
         // 404/500 같은 실패 응답으로 멀쩡한 캐시를 덮어쓰지 않는다
         if (res.ok) {
