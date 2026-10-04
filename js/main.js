@@ -1430,6 +1430,58 @@ function weekChart() {
     <div class="wc-sum">최근 7일 ${total >= 0 ? '+' : '−'}${Math.abs(total)} LP · ${played}일 플레이</div>`;
 }
 
+// ---------- 레이팅 추이 그래프 ----------
+// "끄고 나면 실력이 숫자로 남는다"를 가장 직접 보여주는 그림. 판이 끝난 뒤의 레이팅을
+// 오래된 것부터 잇는다. 고를 게 있는 종목은 가장 최근에 한 조합을 그린다 (조합마다
+// 레이팅이 따로라, 섞어서 한 줄로 그리면 조합을 바꿀 때마다 선이 튄다).
+function trendChart(game, d) {
+  const vars = Object.entries(d.variants || {}).filter(([, v]) => v.sessions > 0);
+  if (!vars.length) return '';
+  vars.sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0));
+  const [vk, v] = vars[0];
+  const pts = Array.isArray(v.trend) ? v.trend : [];
+  const multi = vars.length > 1 || vk;
+  const head = `<div class="var-head">레이팅 추이${multi ? ` · ${variantLabelOf(game, vk) || '기본'}` : ''}</div>`;
+  // 빈 상태: 왜 비었는지와 언제 채워지는지를 말한다
+  if (pts.length < 2) {
+    return `${head}<p class="trend-empty">두 판 이상 하면 여기에 레이팅이 어떻게 움직였는지 그려집니다.</p>`;
+  }
+
+  const first = pts[0], last = pts[pts.length - 1];
+  const hi = Math.max(...pts), lo = Math.min(...pts);
+  // 세로 범위: 변화가 작을 때 몇 LP 차이가 절벽처럼 보이지 않게 최소 폭을 둔다
+  const mid = (hi + lo) / 2;
+  const span = Math.max(80, (hi - lo) * 1.25);
+  const top = mid + span / 2, bottom = mid - span / 2;
+  const W = 300, H = 72;
+  const x = i => (i / (pts.length - 1)) * W;
+  const y = r => ((top - r) / span) * H;
+  const line = pts.map((r, i) => `${x(i).toFixed(1)},${y(r).toFixed(1)}`).join(' ');
+  // 범위 안에 걸친 티어 경계는 점선으로 — "실버까지 얼마 남았나"가 눈에 보인다
+  const tiers = TIERS.filter(t => t.min > bottom && t.min < top).map(t => `
+      <line x1="0" x2="${W}" y1="${y(t.min).toFixed(1)}" y2="${y(t.min).toFixed(1)}" class="trend-tier"/>`).join('');
+  const tierLabels = TIERS.filter(t => t.min > bottom && t.min < top).map(t =>
+    `<span class="trend-tier-label" style="top:${(y(t.min) / H * 100).toFixed(1)}%;color:${t.color}">${t.name} ${nf(t.min)}</span>`).join('');
+  const diff = last - first;
+  const lastTier = tierOf(last);
+  return `${head}
+    <div class="trend">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        ${tiers}
+        <polygon points="0,${H} ${line} ${W},${H}" class="trend-area"/>
+        <polyline points="${line}" class="trend-line"/>
+      </svg>
+      ${tierLabels}
+      <i class="trend-dot" style="top:${(y(last) / H * 100).toFixed(1)}%;background:${lastTier.color}"></i>
+    </div>
+    <div class="trend-sum">
+      <span>최근 ${pts.length}판</span>
+      <span>${nf(first)} → <b style="color:${lastTier.color}">${nf(last)}</b>
+        <i class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${nf(Math.abs(diff))}</i></span>
+    </div>
+    <div class="trend-sum faint"><span>이 구간 최고 ${nf(hi)}</span><span>최저 ${nf(lo)}</span></div>`;
+}
+
 function renderRecords() {
   applyDecay(state);
   const $sc = $('#records-scroll');
@@ -1497,7 +1549,7 @@ function renderRecords() {
       ? `<span class="sect-title">${mine.name}</span>`
       : (nextT !== null ? `<span class="sect-goal">${TIERS[nextT].name}까지 ${nf(TIERS[nextT].min - d.rating)}</span>` : '');
     sects.push(`<div class="sect"><div class="sect-head">${g.icon} ${g.name} · ${nf(d.sessions)}판 ${titleHtml}</div>
-      <div class="stat-rows">${lines.join('')}</div>${vHtml}</div>`);
+      <div class="stat-rows">${lines.join('')}</div>${trendChart(g, d)}${vHtml}</div>`);
   }
   // 별관은 랭크와 섞이지 않게 맨 아래에 따로 둔다
   const sp = state.sudokuProg;

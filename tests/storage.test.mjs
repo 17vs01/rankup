@@ -33,6 +33,8 @@ const CASES = {
   'seenRules·modes 깨짐': '{"disc":{},"seenRules":"x","modes":7,"trapSeen":[1]}',
   'streak null': '{"disc":{},"streak":null,"freeze":99,"totalSessions":"7"}',
   'theme 이상': '{"disc":{},"theme":"<script>"}',
+  'trend가 문자열': '{"disc":{"math":{"rating":1200,"sessions":3,"variants":{"":{"rating":1200,"sessions":3,"trend":"x"}}}}}',
+  'trend에 이상한 값': '{"disc":{"math":{"rating":1200,"sessions":3,"variants":{"":{"rating":1200,"sessions":3,"trend":[1000,null,"a",1020]}}}}}',
 };
 
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -40,7 +42,7 @@ const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 export async function run() {
   const c = collector();
   // storage.js는 rating·platform을 import한다. 저장소는 가짜로, 부식은 0으로 둔다.
-  const m = await expose('js/storage.js', ['loadState', '__setRaw'],
+  const m = await expose('js/storage.js', ['loadState', 'recordSession', 'TREND_MAX', '__setRaw'],
     `const START_RATING = 1000; const pendingDecay = () => 0;
      const storage = { get: async () => null, set: async () => {}, remove: async () => {} };
      function __setRaw(v) { raw = v; }`);
@@ -56,6 +58,7 @@ export async function run() {
       if (!isObj(d.variants)) bad.push(`${id}.variants 모양`);
       for (const [k, v] of Object.entries(d.variants || {})) {
         if (!isObj(v) || !Number.isFinite(v.rating)) bad.push(`${id}.variants[${k}]`);
+        else if (!Array.isArray(v.trend) || v.trend.some(r => !Number.isFinite(r))) bad.push(`${id}.variants[${k}].trend`);
       }
     }
     if (!Array.isArray(st.history) || st.history.some(h => !isObj(h) || !Number.isFinite(h.t))) bad.push('history');
@@ -68,6 +71,35 @@ export async function run() {
     if (st.sudoku != null && !(isObj(st.sudoku) && Array.isArray(st.sudoku.grid) && st.sudoku.grid.length === 81)) bad.push('sudoku 진행판');
     for (const k of ['seenRules', 'modes', 'trapSeen']) if (!isObj(st[k])) bad.push(k);
     if (bad.length) c.note(`"${label}" 저장본을 읽은 뒤에도 깨진 값이 남음`, bad.join(', '));
+  }
+
+  // ---------- 추이 그래프: 옛 저장본은 전체 기록(history)에서 조합별로 채운다 ----------
+  // history는 최신이 앞이다. 추이는 오래된 것부터여야 하고, 다른 종목·다른 조합이 섞이면 안 된다.
+  {
+    const old = {
+      disc: {
+        math: { rating: 1040, sessions: 3, variants: { '': { rating: 1040, sessions: 3 } } },
+        lexi: { rating: 990, sessions: 2, variants: { kor: { rating: 990, sessions: 1 }, eng: { rating: 1010, sessions: 1 } } },
+      },
+      history: [
+        { t: 5, discId: 'math', vk: '', delta: 20, r: 1040 },
+        { t: 4, discId: 'lexi', vk: 'eng', delta: 10, r: 1010 },
+        { t: 3, discId: 'math', vk: '', delta: 12, r: 1020 },
+        { t: 2, discId: 'lexi', vk: 'kor', delta: -10, r: 990 },
+        { t: 1, discId: 'math', vk: '', delta: 8, r: 1008 },
+      ],
+    };
+    m.__setRaw(JSON.stringify(old));
+    const st = m.loadState();
+    const got = JSON.stringify([st.disc.math.variants[''].trend, st.disc.lexi.variants.kor.trend, st.disc.lexi.variants.eng.trend]);
+    const want = JSON.stringify([[1008, 1020, 1040], [990], [1010]]);
+    if (got !== want) c.note('옛 저장본의 추이를 기록에서 잘못 채움', `${got} (기대 ${want})`);
+
+    // 판을 기록하면 추이가 한 칸씩 늘고, 한도를 넘으면 오래된 것부터 빠진다
+    const v = st.disc.math.variants[''];
+    for (let i = 0; i < m.TREND_MAX + 5; i++) m.recordSession(st, 'math', '', { score: 1, delta: 1, perf: 1 });
+    if (v.trend.length !== m.TREND_MAX) c.note('추이가 한도에서 안 잘림', v.trend.length);
+    if (v.trend[v.trend.length - 1] !== v.rating) c.note('추이의 마지막 값이 지금 레이팅과 다름', `${v.trend[v.trend.length - 1]} vs ${v.rating}`);
   }
   return c;
 }

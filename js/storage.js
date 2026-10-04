@@ -9,6 +9,9 @@ import { START_RATING, pendingDecay } from './rating.js';
 import { storage } from './platform.js';
 
 const KEY = 'rankup-state-v1';
+// 조합마다 판이 끝난 뒤의 레이팅을 이만큼 기억한다 (기록 화면의 추이 그래프).
+// 전체 기록(history)은 120판에서 잘려서, 종목이 15개면 종목당 몇 판밖에 안 남는다.
+export const TREND_MAX = 60;
 const FLUSH_MS = 400;
 
 let raw = null;        // 마지막으로 확정된 JSON 문자열 (아직 안 읽었으면 null)
@@ -66,6 +69,7 @@ export function freshVariant() {
     best: 0,     // 이 조합 최고 점수
     last: 0,     // 이 조합 최근 점수
     lp: 0,       // 이 조합에서 딴 누적 LP
+    trend: [],   // 판이 끝난 뒤의 레이팅, 오래된 것부터 (최대 TREND_MAX)
   };
 }
 
@@ -294,7 +298,15 @@ function normalize(s) {
       };
     }
     // 필드가 깨진 조합 보강
-    for (const v of Object.values(d.variants)) {
+    for (const [vk, v] of Object.entries(d.variants)) {
+      // 추이: 처음 한 번은 전체 기록(history, 최신이 앞)에서 이 조합의 것만 골라 채운다.
+      // 그 뒤로는 recordSession이 판마다 붙인다.
+      if (!Array.isArray(v.trend)) {
+        v.trend = (Array.isArray(s.history) ? s.history : [])
+          .filter(h => h && h.discId === id && (h.vk || '') === vk)
+          .map(h => h.r).reverse();
+      }
+      v.trend = v.trend.filter(r => typeof r === 'number' && Number.isFinite(r)).slice(-TREND_MAX);
       v.rating = num(v.rating, START_RATING);
       v.peak = Math.max(num(v.peak, v.rating), v.rating);
       v.lastPlayed = num(v.lastPlayed, 0);
@@ -458,6 +470,9 @@ export function recordSession(s, discId, variantKey, { score, delta, perf }) {
   v.sessions++;
   v.last = score;
   v.lp += delta;
+  if (!Array.isArray(v.trend)) v.trend = [];
+  v.trend.push(v.rating);
+  if (v.trend.length > TREND_MAX) v.trend.splice(0, v.trend.length - TREND_MAX);
   // 첫 판은 무조건 최고기록이 되므로 트로피는 두 번째 판부터
   const newRecord = score > v.best && v.sessions > 1;
   if (score > v.best) v.best = score;
