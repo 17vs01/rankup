@@ -860,6 +860,7 @@ function choicesFor(p) {
 
 export const trapGame = {
   id: 'trap',
+  ceiling: 2200,   // 문제 가족이 전부 열리는 곳 (main.js ceilingAdjust)
   name: '함정 퀴즈',
   icon: '🪤',
   desc: '한 번 더 생각해야 풀리는 문제',
@@ -908,6 +909,7 @@ export const trapGame = {
       cur = gen();
       for (let t = 0; t < 30 && Math.round(cur.trap) === cur.ans; t++) cur = gen();
       locked = false;
+      ctx.body.scrollTop = 0;   // 앞 문제의 해설을 읽느라 내려가 있던 스크롤을 되돌린다
       $round.innerHTML = `${round} / ${ROUNDS}문제 · 정답 <b>${correct}</b>`;
       $q.innerHTML = cur.q;   // 조건을 굵게 강조하는 문제가 있다
       $why.classList.add('hidden');
@@ -947,6 +949,8 @@ export const trapGame = {
       $round.innerHTML = `${round} / ${ROUNDS}문제 · 정답 <b>${correct}</b>`;
       $next.textContent = round >= ROUNDS ? '결과 보기' : '다음 문제';
       $next.classList.remove('hidden');
+      // 해설이 화면 아래에 걸려 있으면 보이는 데까지 끌어올린다
+      $why.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
     $next.addEventListener('click', next);

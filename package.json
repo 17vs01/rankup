@@ -9,6 +9,7 @@
     "vite": "^8.2.2"
   },
   "scripts": {
+    "test": "node tests/run.mjs",
     "build:toss": "node scripts/make-toss-html.js && vite build",
     "dev:toss": "node scripts/make-toss-html.js && vite",
     "ait:build": "npm run build:toss && ait build",

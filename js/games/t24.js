@@ -121,6 +121,7 @@ const fmt = x => (x.d === 1 ? String(x.n) : `${x.n}/${x.d}`);
 
 export const t24Game = {
   id: 't24',
+  ceiling: 1500,   // 숫자 범위와 목표값이 끝나는 곳 (main.js ceilingAdjust)
   name: '목표 수 만들기',
   icon: '🧩',
   desc: '숫자 4개로 목표값 만들기',

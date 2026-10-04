@@ -56,6 +56,7 @@ function genPair(L) {
 
 export const compareGame = {
   id: 'compare',
+  ceiling: 2800,   // 두 값의 차이가 바닥(4%)에 닿는 곳 (main.js ceilingAdjust)
   name: '수 비교',
   icon: '⚖️',
   desc: '어느 쪽이 큰지 순간 판단',

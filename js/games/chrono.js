@@ -13,6 +13,7 @@ const rnd = (a, b) => a + R() * (b - a);
 
 export const chronoGame = {
   id: 'chrono',
+  ceiling: 2200,   // 허용 오차가 바닥(±5%)에 닿는 곳 (main.js ceilingAdjust)
   name: '체내 시계',
   icon: '⏳',
   desc: '보지 않고 시간 맞히기',

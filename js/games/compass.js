@@ -32,6 +32,7 @@ const HEAD_NAME = ['북', '동', '남', '서'];
 
 export const compassGame = {
   id: 'compass',
+  ceiling: 2150,   // 지시 수가 12개로 고정되는 곳 (main.js ceilingAdjust)
   name: '나침반',
   icon: '🧭',
   desc: '머릿속으로 길 추적하기',

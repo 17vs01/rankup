@@ -8,6 +8,11 @@ export function judge(container, ok, text = '') {
   el.className = 'judge ' + (ok ? 'ok' : 'bad');
   el.innerHTML = `<div class="judge-icon">${ok ? '◯' : '✕'}</div>`
     + (text ? `<div class="judge-text">${text}</div>` : '');
+  // 본문이 스크롤된 상태면(긴 문제) 오버레이도 그만큼 내려서 보이는 자리에 띄운다
+  if (container.scrollTop) {
+    el.style.top = container.scrollTop + 'px';
+    el.style.bottom = -container.scrollTop + 'px';
+  }
   container.appendChild(el);
   // 애니메이션이 끝나면 치운다. 세션이 먼저 끝나 DOM째 사라져도 remove는 무해하다.
   setTimeout(() => el.remove(), 950);

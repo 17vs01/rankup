@@ -25,6 +25,7 @@ const EXPECT = { 5: 36, 6: 58, 7: 85 };
 
 export const schulteGame = {
   id: 'schulte',
+  ceiling: 1900,   // 격자가 7×7로 고정되는 곳 (main.js ceilingAdjust)
   name: '슐테 테이블',
   icon: '🔎',
   desc: '흩어진 숫자를 순서대로 찾기',

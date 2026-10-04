@@ -1,14 +1,16 @@
 // 레이팅 & 티어 시스템 (ELO식 상대 성과 기반)
 
 // 색은 채도를 낮춘 금속 계열로 통일한다. 원색이 7개 섞이면 목록이 시끄러워진다.
+// 실제 값은 css/style.css의 --tier-N에 테마별로 있다. 색을 여기 박아 두면 밝은 테마에서
+// 실버·골드·플래티넘 이름이 배경에 묻힌다 (2:1).
 export const TIERS = [
-  { name: '브론즈',       min: 0,    color: '#B08258' },
-  { name: '실버',         min: 1100, color: '#A9B2BF' },
-  { name: '골드',         min: 1400, color: '#C9A961' },
-  { name: '플래티넘',     min: 1700, color: '#79BDB4' },
-  { name: '다이아',       min: 2000, color: '#7FA0E8' },
-  { name: '마스터',       min: 2300, color: '#A98BD6' },
-  { name: '그랜드마스터', min: 2600, color: '#D97B7B' },
+  { name: '브론즈',       min: 0,    color: 'var(--tier-0)' },
+  { name: '실버',         min: 1100, color: 'var(--tier-1)' },
+  { name: '골드',         min: 1400, color: 'var(--tier-2)' },
+  { name: '플래티넘',     min: 1700, color: 'var(--tier-3)' },
+  { name: '다이아',       min: 2000, color: 'var(--tier-4)' },
+  { name: '마스터',       min: 2300, color: 'var(--tier-5)' },
+  { name: '그랜드마스터', min: 2600, color: 'var(--tier-6)' },
 ];
 
 export const START_RATING = 1000;

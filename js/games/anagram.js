@@ -35,6 +35,7 @@ function mainTier(rating) {
 
 export const anagramGame = {
   id: 'anagram',
+  ceiling: 2000,   // 단어 수준(티어 3)이 끝나는 곳 (main.js ceilingAdjust)
   name: '아나그램',
   icon: '🔤',
   desc: '뜻을 보고 음절 맞추기',

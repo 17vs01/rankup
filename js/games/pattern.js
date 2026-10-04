@@ -143,6 +143,7 @@ function distractors(p) {
 
 export const patternGame = {
   id: 'pattern',
+  ceiling: 2200,   // 규칙 가족이 다 열리고 수만 커지는 구간 (main.js ceilingAdjust)
   name: '규칙 찾기',
   icon: '🕵️',
   desc: '수열의 숨은 규칙 추론',

@@ -6,10 +6,11 @@ import { sfx } from '../audio.js';
 import { judge, comboTick } from '../feedback.js';
 
 const COLORS = [
-  { name: '빨강', css: '#ff5d6c' },
-  { name: '파랑', css: '#5b8cff' },
-  { name: '초록', css: '#34d27b' },
-  { name: '노랑', css: '#ffc94d' },
+  // 색 값은 테마 변수다 — 밝은 테마에서 노랑·초록 글자가 안 읽혀 문제 자체가 성립하지 않았다
+  { name: '빨강', css: 'var(--c-red)' },
+  { name: '파랑', css: 'var(--c-blue)' },
+  { name: '초록', css: 'var(--c-green)' },
+  { name: '노랑', css: 'var(--c-yellow)' },
 ];
 const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
@@ -286,7 +287,7 @@ export const focusGame = {
       let cur = null, curTimeout = null;
 
       ctx.body.innerHTML = `
-        <div class="focus-stage"><b style="color:#5b8cff">파란 ●</b> 일 때만 탭!</div>
+        <div class="focus-stage"><b style="color:var(--c-blue)">파란 ●</b> 일 때만 탭!</div>
         <div class="reaction-pad" id="g-pad"><span style="font-size:64px" id="g-shape"></span></div>
         <div class="score-line" id="g-score">명중 <b>0</b> · 오탭 0</div>
       `;
@@ -295,10 +296,10 @@ export const focusGame = {
       const $s = ctx.body.querySelector('#g-score');
 
       const SHAPES = [
-        { html: '<span style="color:#5b8cff">●</span>', target: true },
-        { html: '<span style="color:#ff5d6c">●</span>', target: false },
-        { html: '<span style="color:#5b8cff">■</span>', target: false },
-        { html: '<span style="color:#ffc94d">▲</span>', target: false },
+        { html: '<span style="color:var(--c-blue)">●</span>', target: true },
+        { html: '<span style="color:var(--c-red)">●</span>', target: false },
+        { html: '<span style="color:var(--c-blue)">■</span>', target: false },
+        { html: '<span style="color:var(--c-yellow)">▲</span>', target: false },
       ];
 
       function show() {

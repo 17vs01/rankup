@@ -77,7 +77,26 @@ function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   $(id).classList.add('active');
   inputLockedUntil = performance.now() + LOCK_MS;
+  if (id === '#screen-result') {
+    // 결과는 늘 맨 위(점수)부터 보여주고, 아래에 버튼이 더 있으면 알린다
+    $('#result-body').scrollTop = 0;
+    // rAF는 화면이 가려져 있으면 안 돈다. 타이머로도 한 번 더 잰다.
+    requestAnimationFrame(updateResultFade);
+    setTimeout(updateResultFade, 60);
+  }
 }
+
+// 결과 화면에서 버튼이 화면 아래로 밀려나 있으면 페이드로 "더 있어요"를 알린다.
+// 넘친 게 맨 아래 한 줄 설명뿐이면 띄우지 않는다 — 페이드가 멀쩡히 보이는 버튼을 덮는다.
+function updateResultFade() {
+  const el = $('#result-body');
+  const btns = el.querySelectorAll('.result-buttons button');
+  const last = btns[btns.length - 1];
+  const hidden = last && last.getBoundingClientRect().bottom > el.getBoundingClientRect().bottom + 2;
+  $('#result-fade').classList.toggle('off', !hidden);
+}
+$('#result-body').addEventListener('scroll', updateResultFade, { passive: true });
+window.addEventListener('resize', updateResultFade);
 
 // 전환 직후 도착한 포인터/클릭 이벤트를 캡처 단계에서 삼킨다
 for (const type of ['pointerdown', 'click']) {
@@ -198,9 +217,14 @@ function renderHome() {
     const d = state.disc[id];
     const done = plan.done.includes(id);
     const note = decayNote(g, d, now);
+    // 뽑힌 실제 이유를 말한다. 예전에는 나머지를 전부 "평균보다 뒤처져 있어요"로 불러서,
+    // 오래 안 해서 뽑힌 평균 이상 종목에도 그 말이 붙었다.
+    const daysAgo = d.lastPlayed ? Math.floor((now - d.lastPlayed) / (24 * 3600 * 1000)) : 0;
     const why = d.sessions === 0 ? '아직 안 해본 종목'
       : (note && note.urgent) ? note.text
-      : '평균보다 뒤처져 있어요';
+      : d.rating < avg ? '평균보다 뒤처져 있어요'
+      : daysAgo >= 1 ? `${daysAgo}일 만이에요`
+      : '오늘의 추천';
     const b = document.createElement('button');
     b.className = 'daily-item' + (done ? ' done' : '');
     b.innerHTML = `
@@ -656,6 +680,7 @@ function launch(game, quick, prepare) {
   $('#game-timer').textContent = '';
   $('#game-timer').classList.remove('urgent');
   const $body = $('#game-body');
+  $body.scrollTop = 0;
   show('#screen-game');
 
   // 처음 보는 판은 3초 동안 한 줄 요약을 되새겨주고,
@@ -871,6 +896,19 @@ function variantRows(game, d) {
   return keys.map(k => ({ key: k, label: variantLabelOf(game, k), ...vars[k] }));
 }
 
+// ---------- 난이도 상한 ----------
+// 종목마다 문제가 더는 어려워지지 않는 레이팅이 있다 (game.ceiling). 어휘력은 2000에서
+// 단어 수준이 끝나고, 슐테는 1900에서 7×7로 고정된다. 그 위에서도 기대치가 그대로면
+// 상한을 넘긴 사람은 판마다 LP가 오르기만 한다 — 균형점이 없다.
+// 상한을 넘은 만큼 기대치를 올려서(150 LP마다 8%) 어디선가 멈추게 한다.
+// 종목이 자기 안에서 이미 처리하면(암산·메아리·예측 불가) ceiling을 달지 않는다.
+const CEILING_STEP = 150;
+const CEILING_GAIN = 0.08;
+function ceilingAdjust(game, rating, perf) {
+  if (!game.ceiling || rating <= game.ceiling || !Number.isFinite(perf)) return perf;
+  return perf / (1 + CEILING_GAIN * (rating - game.ceiling) / CEILING_STEP);
+}
+
 // ---------- 결과 ----------
 function endSession(game, result) {
   const d = state.disc[game.id];
@@ -879,6 +917,8 @@ function endSession(game, result) {
   const vLabel = vKey ? variantLabelOf(game, vKey) : null;
   const before = getVariant(d, vKey).rating;
   const beforeTier = tierOf(before);
+  // 이 아래로는 상한 보정을 거친 성과만 쓴다 (LP·주간 점수·기록 모두)
+  result = { ...result, perf: ceilingAdjust(game, before, result.perf) };
   const delta = ratingDelta(result.perf);
 
   // 개인 기록. 게임이 result.time = {key, value, unit, label} 하나 또는

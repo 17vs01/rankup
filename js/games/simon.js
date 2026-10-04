@@ -12,10 +12,10 @@ import { judge } from '../feedback.js';
 let R = Math.random;
 
 const PADS = [
-  { css: '#5b8cff', tone: 392 },   // 파랑
-  { css: '#34d27b', tone: 523 },   // 초록
-  { css: '#ffc94d', tone: 659 },   // 노랑
-  { css: '#ff5d6c', tone: 784 },   // 빨강
+  { css: 'var(--c-blue)', tone: 392 },    // 파랑
+  { css: 'var(--c-green)', tone: 523 },   // 초록
+  { css: 'var(--c-yellow)', tone: 659 },  // 노랑
+  { css: 'var(--c-red)', tone: 784 },     // 빨강
 ];
 const LIVES = 3;
 

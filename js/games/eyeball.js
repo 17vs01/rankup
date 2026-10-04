@@ -13,6 +13,7 @@ const rnd = (a, b) => a + R() * (b - a);
 
 export const eyeballGame = {
   id: 'eyeball',
+  ceiling: 2400,   // 허용 오차가 바닥(±2.5%)에 닿는 곳 (main.js ceilingAdjust)
   name: '눈대중',
   icon: '📐',
   desc: '각도·비율·개수 순간 추정',

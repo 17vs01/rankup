@@ -39,6 +39,12 @@ html[data-theme="onyx"] {
   --good-strong: rgba(122, 203, 147, 0.32);
   --bad-strong: rgba(232, 132, 120, 0.32);
   --bad-line: rgba(232, 132, 120, 0.35);
+
+  /* 티어 색 — 채도를 낮춘 금속 계열 */
+  --tier-0: #B08258; --tier-1: #A9B2BF; --tier-2: #C9A961; --tier-3: #79BDB4;
+  --tier-4: #7FA0E8; --tier-5: #A98BD6; --tier-6: #D97B7B;
+  /* 색 자체가 문제인 종목(스트룹·고/노고·메아리)의 네 가지 색 */
+  --c-red: #ff5d6c; --c-blue: #5b8cff; --c-green: #34d27b; --c-yellow: #ffc94d;
 }
 
 html[data-theme="graphite"] {
@@ -72,6 +78,12 @@ html[data-theme="graphite"] {
 }
 
 html[data-theme="linen"] {
+  /* 밝은 배경에서는 같은 색이 1.4~2.9:1밖에 안 나왔다 (노랑 글자가 사실상 안 보였다).
+     배경과 흰 카드 양쪽에서 4.5:1을 넘는 어두운 쪽으로 따로 잡는다. */
+  --tier-0: #8A5A2B; --tier-1: #5A6675; --tier-2: #7E6410; --tier-3: #1F776C;
+  --tier-4: #3560C8; --tier-5: #7146B5; --tier-6: #B0393F;
+  --c-red: #C4283A; --c-blue: #2A5BD7; --c-green: #157F4A; --c-yellow: #8F6A00;
+
   --bg: #F6F4F0;
   --surface: #FFFFFF;
   --surface-2: #EEECE7;
@@ -385,11 +397,26 @@ html.booting #app { visibility: hidden; }
 }
 .game-timer.urgent { color: var(--bad); }
 
+/* 내용이 화면보다 길면 이 안에서만 스크롤한다 (상단 바는 제자리).
+   예전에는 넘친 만큼 페이지 전체가 밀려서, 작은 폰에서 함정 퀴즈의 "다음 문제" 버튼이
+   화면 아래로 사라졌고 더 있다는 표시도 없었다.
+
+   가운데 정렬은 justify-content: center가 아니라 위아래 빈칸(::before/::after)으로 한다.
+   center는 넘칠 때 위쪽까지 잘라서 스크롤로도 못 본다. 빈칸은 넘치면 0으로 줄어든다. */
 .game-body {
-  flex: 1; display: flex; flex-direction: column;
-  justify-content: center; align-items: center; gap: 20px;
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  justify-content: flex-start; align-items: center; gap: 20px;
   position: relative; padding-bottom: 8px;
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent;
+  scroll-padding-bottom: 76px;
 }
+.game-body::before, .game-body::after { content: ''; flex: 1 0 0px; }
+.game-body::before { margin-bottom: -20px; }   /* 빈칸이 gap을 한 번 더 먹지 않게 */
+.game-body::after { margin-top: -20px; }
+.game-body > * { flex-shrink: 0; }
+.game-body::-webkit-scrollbar { width: 4px; }
+.game-body::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
 
 /* 일시정지 — 백그라운드에 다녀오면 판을 덮어서 세워 둔다.
    화면 전체를 덮어야 뒤의 게임이 눌리지 않는다. */
@@ -397,6 +424,9 @@ html.booting #app { visibility: hidden; }
   position: absolute; inset: 0; z-index: 30;
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
+  /* color-mix를 모르는 기기(iOS 16.2 미만, 오래된 안드로이드 WebView)는 윗줄을 쓴다.
+     배경이 없으면 멈춘 동안 뒤의 문제가 그대로 보인다 — 불투명이 안전한 기본값이다. */
+  background: var(--bg);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
 }
@@ -508,10 +538,20 @@ html.booting #app { visibility: hidden; }
 .stroop-word { font-size: 50px; font-weight: 700; }
 
 /* ---------- 결과 ---------- */
+/* 신기록·칭호·승급이 한꺼번에 뜨면 작은 폰에서 버튼 넷이 전부 화면 밖으로 나갔다.
+   게임 화면과 같은 방식으로 이 안에서 스크롤하고, 아래에 더 있으면 페이드로 알린다. */
 .result-body {
-  flex: 1; display: flex; flex-direction: column;
-  justify-content: center; align-items: center; gap: 6px; text-align: center;
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  justify-content: flex-start; align-items: center; gap: 6px; text-align: center;
+  overflow-y: auto; overflow-x: hidden; padding-bottom: 20px;
+  scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent;
 }
+.result-body::before, .result-body::after { content: ''; flex: 1 0 0px; }
+.result-body::before { margin-bottom: -6px; }
+.result-body::after { margin-top: -6px; }
+.result-body > * { flex-shrink: 0; }
+.result-body::-webkit-scrollbar { width: 4px; }
+.result-body::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
 .result-game { font-size: 11.5px; color: var(--text-faint); letter-spacing: .14em; font-weight: 600; }
 .result-score { font-size: 58px; font-weight: 200; letter-spacing: -.03em; margin: 6px 0 2px; }
 .result-detail { font-size: 13.5px; color: var(--text-dim); word-break: keep-all; padding: 0 20px; }
@@ -1234,6 +1274,11 @@ html.booting #app { visibility: hidden; }
   transition: background .1s, transform .08s, box-shadow .1s;
 }
 .sm-pad:active { transform: scale(.97); }
+/* color-mix를 모르는 기기에서는 꺼진 패드에 색이 하나도 안 남아 넷이 똑같아 보인다.
+   그때만 테두리에 패드 색을 준다. */
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+  .sm-pad { background: var(--surface); border-color: var(--pad); }
+}
 .sm-pad.lit {
   background: var(--pad); border-color: var(--pad);
   box-shadow: 0 0 28px color-mix(in srgb, var(--pad) 60%, transparent);
@@ -1316,7 +1361,12 @@ html.booting #app { visibility: hidden; }
 .tq-verdict.good { color: var(--good); }
 .tq-verdict.bad { color: var(--bad); }
 .tq-text { font-size: 13px; color: var(--text-dim); line-height: 1.7; word-break: keep-all; }
-.tq-next { max-width: 340px; }
+/* 해설이 길어도 "다음 문제"는 늘 화면 아래에 붙어 있다. 그림자가 밑으로 지나가는 글을 가린다. */
+.tq-next {
+  max-width: 340px; position: sticky; bottom: 0; z-index: 2;
+  box-shadow: 0 -10px 12px 2px var(--bg), 0 12px 0 4px var(--bg);
+}
+.tq-why { scroll-margin-top: 8px; }
 #tq-choices { max-width: 340px; }
 #tq-choices .choice { padding: 12px 16px; }
 

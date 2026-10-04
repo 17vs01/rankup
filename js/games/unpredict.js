@@ -9,7 +9,12 @@ import { comboTick } from '../feedback.js';
 let R = Math.random;
 
 const TRIALS = 60;
-const EXPECTED_MISS_RATE = 0.44; // 이 정도 피하면 본전. 완전 무작위(0.5)면 소폭 상승.
+// 이 정도 피하면 본전. 시작 레이팅에서 45%이고 레이팅 200마다 1%p씩 오른다.
+// 예전에는 44%로 고정이라, 동전만 던져도(50%) 언제나 기대 이상이었다 — 300판에 2,379까지
+// 오르고도 계속 올랐고, 생각 없이 주간 점수를 가장 많이 버는 방법이었다.
+// 완전 무작위가 본전이 되는 곳이 2000 근처(다이아)다. 그 위는 무작위보다 잘해야 하는데
+// 평균적으로는 불가능하므로 거기서 멈춘다.
+const expectedMissRate = rating => 0.44 + 0.01 * Math.max(0, (rating - 800) / 200);
 
 // 다중 차수 마르코프 예측기 (문맥 혼합)
 function makePredictor(maxOrder, useTiming) {
@@ -156,7 +161,7 @@ export const unpredictGame = {
       const hitRate = Math.round(aiHits / TRIALS * 100);
       ctx.finish({
         score: misses,
-        perf: (misses / TRIALS) / EXPECTED_MISS_RATE,
+        perf: (misses / TRIALS) / expectedMissRate(ctx.rating),
         detail: `AI 적중률 ${hitRate}% · 최고 ${bestEvade}연속 회피`,
         times: [
           { key: 'ai_rate_min', value: hitRate, unit: 'pct', label: '최저 AI 적중률' },

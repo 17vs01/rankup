@@ -54,6 +54,7 @@ function migrateStore(store, list) {
 
 export const lexiGame = {
   id: 'lexi',
+  ceiling: 2000,   // 단어 수준(티어 3)이 끝나는 곳 (main.js ceilingAdjust)
   name: '어휘력',
   icon: '📚',
   desc: '우리말·영단어 골라서 또는 섞어서',
