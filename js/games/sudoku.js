@@ -228,8 +228,12 @@ export const sudokuGame = {
       render();
     });
 
+    // 맞게 채운 칸은 주어진 칸처럼 잠근다. 넣는 순간 맞는지 알려주는 판이라 그 칸은 이미
+    // 확정이다 — 예전에는 그 칸을 고른 채 숫자판을 스치면 실수 1회에 맞던 숫자까지 지워졌다.
+    const settled = i => grid[i] !== 0 && grid[i] === solution[i];
+
     function place(v) {
-      if (finished || sel < 0 || given[sel]) return;
+      if (finished || sel < 0 || given[sel] || settled(sel)) return;
       if (noteMode) {
         if (grid[sel]) return;
         undoStack.push({ i: sel, prev: 0, prevNotes: new Set(notes[sel]) });
@@ -286,7 +290,7 @@ export const sudokuGame = {
 
     ctx.body.querySelector('#sd-erase').addEventListener('pointerdown', e => {
       e.preventDefault();
-      if (sel < 0 || given[sel]) return;
+      if (sel < 0 || given[sel] || settled(sel)) return;
       undoStack.push({ i: sel, prev: grid[sel], prevNotes: new Set(notes[sel]) });
       grid[sel] = 0;
       notes[sel].clear();
@@ -348,7 +352,7 @@ export const sudokuGame = {
 
     // ---------- 시간 / 종료 ----------
     let readElapsed = () => 0;
-    const stop = ctx.stopwatch();
+    const stop = ctx.stopwatch(null, elapsedBefore);   // 이어하는 판은 지난 시간부터 센다
     readElapsed = stop;
 
     ctx.onAbort = () => save(false);

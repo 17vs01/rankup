@@ -181,15 +181,32 @@ export function haptic(type) {
 // 토스 밖에서는 localStorage로 떨어진다. 어느 쪽이든 storage.js가 이 어댑터만 쓴다.
 //
 // 토스 쪽이 실패하면 localStorage로 물러난다 — 기록이 사라지는 것보다는 낫다.
+//
+// 읽을 때는 둘 중 더 나중에 저장된 쪽을 고른다 (저장본의 savedAt). 쓰기는 기기 → 토스
+// 순서인데 토스 쪽만 실패하면(연결 끊김 등) 토스에는 옛 기록이 남는다. 예전에는 토스 값이
+// 있으면 무조건 그걸 써서, 다음에 열 때 그 사이에 한 판들이 사라질 수 있었다.
+function savedAtOf(raw) {
+  try {
+    const t = JSON.parse(raw).savedAt;
+    return typeof t === 'number' && Number.isFinite(t) ? t : 0;
+  } catch { return 0; }
+}
+
+/** 토스 저장본(remote)과 기기 저장본(local) 중 쓸 것. 시각을 모르면 토스 쪽을 믿는다. */
+export function newerOf(remote, local) {
+  if (remote == null) return local;
+  if (local == null || local === remote) return remote;
+  return savedAtOf(local) > savedAtOf(remote) ? local : remote;
+}
+
 export const storage = {
   async get(key) {
+    let local = null;
+    try { local = localStorage.getItem(key); } catch { local = null; }
     if (sdk?.Storage?.getItem) {
-      try {
-        const v = await sdk.Storage.getItem(key);
-        if (v != null) return v;
-      } catch { /* 아래로 */ }
+      try { return newerOf(await sdk.Storage.getItem(key), local); } catch { /* 아래로 */ }
     }
-    try { return localStorage.getItem(key); } catch { return null; }
+    return local;
   },
   async set(key, value) {
     // 기기 저장소부터 동기로 쓴다. 앱이 닫히는 순간(pagehide)에도 이 줄은 반드시 끝난다 —

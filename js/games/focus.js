@@ -1,7 +1,7 @@
 // 집중력 — 반응속도·스트룹·고/노고 중 골라서 단련
 // 1종목이면 3판, 2종목이면 각 2판, 3종목 모두면 각 1판.
 // (예전 5판/각 3판은 스트룹·고노고만 골라도 100초가 넘어 "60초" 약속과 멀었다)
-// 3종목 모두에서 레벨 기준을 전부 충족하면 레벨업. 상한 없음.
+// 3종목 모두에서 레벨 기준을 전부 충족하면 레벨업.
 import { sfx } from '../audio.js';
 import { judge, comboTick } from '../feedback.js';
 
@@ -25,7 +25,10 @@ function goalsFor(t) {
   return {
     reaction: Math.max(220, 420 - (t - 1) * 8),  // 평균 반응 이하 (ms)
     stroop: 8 + t,                                // 정답 − 오답 이상
-    gonogo: 6 + t,                                // 명중 − 오탭×2 − 놓침 이상
+    // 고/노고는 실수 한도다 (오탭×2 + 놓침 이하). 예전 기준은 "명중 − 실수 ≥ 6 + t"였는데,
+    // 파란 ●는 20초에 평균 9~10개만 나온다 — 레벨 4부터는 한 번도 안 틀려도 그 판에
+    // 표적이 많이 나와야만 통과했다. 실력이 아니라 운이 레벨을 정했다.
+    gonogo: Math.max(0, 3 - Math.floor((t - 1) / 2)),   // 레벨 1~2: 3 · 3~4: 2 · 5~6: 1 · 7+: 0
   };
 }
 
@@ -87,7 +90,7 @@ export const focusGame = {
       let html;
       if (sel.length === 3) {
         html = `3종목 모두 통과하면 레벨업 — 지금 <b>${level}</b>단계<br>`
-          + `기준: 반응 ≤ ${goal.reaction}ms · 스트룹 ≥ ${goal.stroop} · 고/노고 ≥ ${goal.gonogo}`;
+          + `기준: 반응 ≤ ${goal.reaction}ms · 스트룹 ≥ ${goal.stroop} · 고/노고 실수 ≤ ${goal.gonogo}`;
       } else {
         const reps = sel.length === 1 ? 3 : 2;
         html = `${sel.length}종목 집중 단련 — 각 ${reps}판`;
@@ -132,7 +135,7 @@ export const focusGame = {
     const parts = [];
     let bestReaction = null;   // 이번 판 최고 반응속도 (부정출발 제외, ms)
     // 레벨 판정용 — 3종목 모두일 때 각 종목의 성적
-    const stats = { reactionAvg: null, stroopNet: null, gonogoNet: null };
+    const stats = { reactionAvg: null, stroopNet: null, gonogoErr: null };
 
     function nextStage() {
       if (planIdx >= plan.length) return end();
@@ -336,9 +339,11 @@ export const focusGame = {
         cur = null;
         const net = hits - falses * 2 - misses;
         totalPts += Math.max(0, net);
-        stats.gonogoNet = net;
+        // 레벨 판정은 실수로 한다 (점수는 그대로 명중 − 실수). 하나도 못 맞힌 판은 통과가 아니다.
+        const errs = falses * 2 + misses;
+        stats.gonogoErr = hits > 0 ? errs : Infinity;
         parts.push(`고/노고 ${hits}`);
-        judge(ctx.body, net >= goal.gonogo, `명중 ${hits} · 오탭 ${falses} · 놓침 ${misses}`);
+        judge(ctx.body, stats.gonogoErr <= goal.gonogo, `명중 ${hits} · 오탭 ${falses} · 놓침 ${misses}`);
         ctx.delay(nextStage, 950);
       });
     }
@@ -353,7 +358,7 @@ export const focusGame = {
       if (sel.length === 3
         && stats.reactionAvg !== null && stats.reactionAvg <= goal.reaction
         && stats.stroopNet !== null && stats.stroopNet >= goal.stroop
-        && stats.gonogoNet !== null && stats.gonogoNet >= goal.gonogo) {
+        && stats.gonogoErr !== null && stats.gonogoErr <= goal.gonogo) {
         leveledUp = true;
       }
 

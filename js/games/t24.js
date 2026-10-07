@@ -304,6 +304,9 @@ export const t24Game = {
           $fb.textContent = `성공! ${fmt(tiles[0])} = ${target}  (${took.toFixed(1)}초)`;
           $fb.className = 't24-fb good';
           if (autoNext) {
+            // 넘어가기 전 0.9초 동안 입력을 잠근다 (newRound가 푼다). 안 잠그면 그 사이에
+            // 되돌리기 → 같은 수로 다시 합치기로 한 문제를 두 번 정답 처리할 수 있었다.
+            revealed = true;
             ctx.delay(newRound, 900);
           } else {
             // 자동 넘기기 OFF: 확인을 눌러야 다음 문제로 (타임어택은 그동안에도 시계가 간다)

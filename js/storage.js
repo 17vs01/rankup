@@ -351,6 +351,7 @@ function normalize(s) {
 
 // 겉보기에는 동기다. 메모리를 먼저 갱신하고 실제 기록은 뒤로 미룬다.
 export function saveState(s) {
+  s.savedAt = Date.now();   // 토스 저장본과 기기 저장본 중 최신을 가리는 데 쓴다 (platform.newerOf)
   raw = JSON.stringify(s);
   dirty = true;
   scheduleFlush();

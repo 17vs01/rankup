@@ -101,5 +101,25 @@ export async function run() {
     if (v.trend.length !== m.TREND_MAX) c.note('추이가 한도에서 안 잘림', v.trend.length);
     if (v.trend[v.trend.length - 1] !== v.rating) c.note('추이의 마지막 값이 지금 레이팅과 다름', `${v.trend[v.trend.length - 1]} vs ${v.rating}`);
   }
+
+  // ---------- 토스 저장본 vs 기기 저장본: 더 나중에 저장된 쪽 ----------
+  {
+    const p = await expose('js/platform.js', ['newerOf']);
+    const at = t => JSON.stringify({ disc: {}, savedAt: t });
+    const cases = [
+      ['토스만 있음', at(5), null, at(5)],
+      ['기기만 있음', null, at(5), at(5)],
+      ['둘 다 없음', null, null, null],
+      ['기기가 더 최신 (토스 쓰기가 실패했던 경우)', at(5), at(9), at(9)],
+      ['토스가 더 최신 (다른 기기에서 하고 온 경우)', at(9), at(5), at(9)],
+      ['시각이 없는 옛 저장본끼리는 토스', '{"disc":{},"a":1}', '{"disc":{},"a":2}', '{"disc":{},"a":1}'],
+      ['기기 저장본이 깨졌으면 토스', at(5), '{oops', at(5)],
+      ['토스 저장본이 깨졌고 기기에 시각이 있으면 기기', '{oops', at(5), at(5)],
+    ];
+    for (const [label, remote, local, want] of cases) {
+      const got = p.newerOf(remote, local);
+      if (got !== want) c.note('저장본 고르기가 틀림', `${label}: ${got}`);
+    }
+  }
   return c;
 }

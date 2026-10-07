@@ -624,13 +624,17 @@ function makeCtx(game) {
       };
     },
     // 흐르는 시간(카운트업). 제한시간이 없는 종목용.
-    stopwatch(onTick) {
+    // offsetSec: 이어하는 판이 이미 쓴 시간. 화면에만 더한다 (돌려주는 값은 이번에 흐른 시간).
+    // 예전에는 스도쿠를 이어하면 목록은 "5분 경과"인데 판에 들어가면 00:00부터 셌다.
+    stopwatch(onTick, offsetSec = 0) {
       if (sessionTimer) clearInterval(sessionTimer);
       const t0 = gameNow();
+      const off = Math.max(0, Math.floor(offsetSec) || 0);
       const render = () => {
         const s = Math.floor((gameNow() - t0) / 1000);
+        const shown = s + off;
         $('#game-timer').textContent =
-          `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+          `${String(Math.floor(shown / 60)).padStart(2, '0')}:${String(shown % 60).padStart(2, '0')}`;
         if (onTick) onTick(s);
       };
       render();
@@ -640,6 +644,10 @@ function makeCtx(game) {
     },
     timer(seconds, onEnd) {
       if (sessionTimer) clearInterval(sessionTimer);
+      // 끝나는 시각을 판의 시계(gameNow)로 정해 두고 남은 시간을 거기서 읽는다.
+      // 예전에는 1초 틱을 세었는데, 일시정지에서 돌아올 때마다 틱이 새로 시작돼서
+      // 멈췄다 올 때마다 최대 1초씩 시간이 늘었다.
+      const endAt = gameNow() + seconds * 1000;
       let remain = seconds;
       const $t = $('#game-timer');
       const render = () => {
@@ -648,7 +656,9 @@ function makeCtx(game) {
       };
       render();
       const tick = () => {
-        remain--;
+        const left = Math.max(0, Math.ceil((endAt - gameNow()) / 1000));
+        if (left === remain) return;
+        remain = left;
         render();
         if (remain <= 5 && remain > 0) sfx.tick();
         if (remain <= 0) {
@@ -657,8 +667,8 @@ function makeCtx(game) {
           onEnd();
         }
       };
-      sessionTimer = setInterval(tick, 1000);
-      sessionTimerRestart = () => { sessionTimer = setInterval(tick, 1000); };
+      sessionTimer = setInterval(tick, 200);
+      sessionTimerRestart = () => { sessionTimer = setInterval(tick, 200); };
     },
     finish(result) {
       if (finished || token !== sessionToken) return;
@@ -722,9 +732,12 @@ function launch(game, quick, prepare) {
 // 방법 화면을 거쳐 시작할 때도 "오늘의 도전"이라는 의도가 유지돼야 한다
 let pendingDaily = false;
 
+let rulesFromAnnex = false;   // 스도쿠 별관에서 연 방법 화면인가 (뒤로 갈 곳이 다르다)
+
 function showRules(game) {
   const r = RULES[game.id];
   if (!r) { startSession(game, true); return; }
+  rulesFromAnnex = !!game.annex;
   $('#rules-icon').textContent = game.icon;
   $('#rules-name').textContent = game.name;
   $('#rules-summary').textContent = r.summary;
@@ -762,7 +775,9 @@ function showRules(game) {
     // 카운트다운 앞에서 고르게 한다 — 게임 안에서 고르면 긴장이 끊긴다
     $('#btn-rules-start').classList.add('hidden');
     game.picker(state, $modes, () => { saveState(state); startSession(game, true, false, pendingDaily); });
-  } else if (game.modes && game.modes.length) {
+  } else if (game.modes && game.modes.length && !pendingDaily) {
+    // 오늘의 도전은 기본 모드로 고정이라 고르는 버튼을 내지 않는다. 예전에는 여기서
+    // 타임어택을 골라도 기본으로 시작됐고, 내 모드 설정만 바뀌었다.
     $('#btn-rules-start').classList.add('hidden');
     const cur = state.modes[game.id] || game.modes[0].id;
     for (const m of game.modes) {
@@ -790,7 +805,11 @@ function showRules(game) {
   }
   show('#screen-rules');
 }
-$('#btn-rules-back').addEventListener('click', () => { pendingDaily = false; renderHome(); });
+function leaveRules() {
+  pendingDaily = false;
+  if (rulesFromAnnex) renderSudoku(); else renderHome();
+}
+$('#btn-rules-back').addEventListener('click', leaveRules);
 
 function startSession(game, skipRules = false, quick = false, daily = false) {
   if (sessionActive) return;   // 재진입 방지
@@ -803,9 +822,10 @@ function startSession(game, skipRules = false, quick = false, daily = false) {
     return;
   }
   pendingDaily = false;
-  const modeId = game.modes ? (state.modes[game.id] || game.modes[0].id) : null;
+  // 도전은 기본 모드로 고정이다 (makeCtx) — 저장된 모드 이름을 제목에 붙이면 거짓말이 된다
+  const modeId = game.modes && !daily ? (state.modes[game.id] || game.modes[0].id) : null;
   const modeName = modeId && game.modes.find(m => m.id === modeId);
-  $('#game-title').textContent = `${game.icon} ${game.name}`
+  $('#game-title').textContent = (daily ? '🗓 도전 · ' : '') + `${game.icon} ${game.name}`
     + (modeName && modeName.id !== game.modes[0].id ? ` · ${modeName.name}` : '');
   launch(game, quick);
 }
@@ -934,9 +954,12 @@ function endSession(game, result) {
     const isNew = prev === undefined || (higherBetter ? t.value > prev : t.value < prev);
     if (isNew) d.records[t.key] = t.value;
     const mark = t.unit === 'sec' || t.unit === 'ms' ? '⏱' : '🏅';
-    recLines.push(isNew
-      ? `<div class="result-newrecord">${mark} ${t.label} 신기록 — ${fmtDur(t.value, t.unit)}${prev !== undefined ? ` (이전 ${fmtDur(prev, t.unit)})` : ''}</div>`
-      : `<div class="result-best">${mark} ${t.label} ${fmtDur(t.value, t.unit)} · 기록 ${fmtDur(d.records[t.key], t.unit)}</div>`);
+    // 첫 판의 기록은 견줄 게 없으니 "신기록"이라 부르지 않는다 (최고 점수 트로피도 두 번째 판부터다)
+    recLines.push(prev === undefined
+      ? `<div class="result-best">${mark} ${t.label} 첫 기록 — ${fmtDur(t.value, t.unit)}</div>`
+      : isNew
+        ? `<div class="result-newrecord">${mark} ${t.label} 신기록 — ${fmtDur(t.value, t.unit)} (이전 ${fmtDur(prev, t.unit)})</div>`
+        : `<div class="result-best">${mark} ${t.label} ${fmtDur(t.value, t.unit)} · 기록 ${fmtDur(d.records[t.key], t.unit)}</div>`);
   }
 
   // 칭호는 종목 전체 레이팅(조합 평균)으로 판정한다 — 한 조합만 파서 얻는 게 아니게
@@ -970,7 +993,9 @@ function endSession(game, result) {
     ? GAMES.find(g => g.id === remain[0])
     : GAMES.slice().filter(g => g.id !== game.id).sort((a, b) =>
       (state.disc[a.id].lastPlayed || 0) - (state.disc[b.id].lastPlayed || 0))[0];
-  const nextWhy = remain.length ? '오늘의 훈련' : '가장 오래 쉬었어요';
+  const nextWhy = remain.length ? '오늘의 훈련'
+    : nextGame && state.disc[nextGame.id].sessions === 0 ? '아직 안 해본 종목'
+    : '가장 오래 쉬었어요';
 
   const dailyDone = plan.done.length >= plan.ids.length;
   const gotFreeze = grantFreezeIfDue();
@@ -1224,6 +1249,10 @@ function startSudoku(levelName, day = null) {
 function endAnnex(game, r) {
   if (r.day) return endDailySudoku(r);
   const { isNew, prev, unlockedName, perfect, firstPerfect } = recordSudoku(state, r.level, r);
+  // 스트릭은 별관에서도 오른다. 보호권 지급을 랭크 판에서만 판단하면, 7일째를
+  // 스도쿠로만 채운 날은 그냥 지나가 버린다.
+  const gotFreeze = grantFreezeIfDue();
+  if (gotFreeze) saveState(state);
   const p = state.sudokuProg;
   const best = p.recs[r.level];
   if (r.solved) sfx.tierup(); else sfx.finish();
@@ -1242,6 +1271,7 @@ function endAnnex(game, r) {
       ? `<div class="result-newrecord">⏱ ${r.level} 최단 기록${prev !== undefined ? ` — 이전 ${fmtDur(prev, 'sec')}` : ''}</div>`
       : (r.solved && best !== undefined ? `<div class="result-best">⏱ ${r.level} 최단 ${fmtDur(best, 'sec')}</div>` : '')}
     ${unlockedName ? `<div class="result-tierup">🔓 ${unlockedName} 단계가 열렸습니다</div>` : ''}
+    ${gotFreeze ? `<div class="result-newrecord">❄ ${state.streak}일 연속 · 스트릭 보호권 +1</div>` : ''}
     <div class="result-annex">랭크 밖 종목이라 LP는 변하지 않아요</div>
     <div class="result-buttons">
       ${canNext ? `<button class="btn-primary" id="btn-sd-next">${nextLv.name} 도전</button>` : ''}
@@ -1261,6 +1291,8 @@ function endAnnex(game, r) {
 // 오늘의 스도쿠 결과 — 해금·난이도 기록과 무관하고, 모두 같은 판이라 공유할 거리가 된다
 function endDailySudoku(r) {
   const { isNew, prev, perfect } = recordSudoku(state, SUDOKU_DAILY.name, r);
+  const gotFreeze = grantFreezeIfDue();
+  if (gotFreeze) saveState(state);
   if (r.solved) sfx.tierup(); else sfx.finish();
   $('#result-body').innerHTML = `
     <div class="result-game">🗓 오늘의 스도쿠</div>
@@ -1272,6 +1304,7 @@ function endDailySudoku(r) {
     ${r.solved && prev !== undefined
       ? (isNew ? `<div class="result-newrecord">⏱ 오늘 기록 단축 — 이전 ${fmtDur(prev, 'sec')}</div>`
         : `<div class="result-best">⏱ 오늘 기록 ${fmtDur(prev, 'sec')}</div>`) : ''}
+    ${gotFreeze ? `<div class="result-newrecord">❄ ${state.streak}일 연속 · 스트릭 보호권 +1</div>` : ''}
     <div class="result-annex">모두가 같은 판을 풉니다 · 내일 새 판이 열려요</div>
     <div class="result-buttons">
       ${r.solved ? '<button class="btn-primary" id="btn-sd-share">결과 공유</button>' : ''}
@@ -1439,7 +1472,12 @@ function trendChart(game, d) {
   if (!vars.length) return '';
   vars.sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0));
   const [vk, v] = vars[0];
-  const pts = Array.isArray(v.trend) ? v.trend : [];
+  const played = Array.isArray(v.trend) ? v.trend : [];
+  // 추이는 판이 끝날 때만 쌓인다. 쉬는 동안 부식으로 줄었으면 마지막 점이 지금 레이팅과
+  // 달라서, 바로 위의 레이팅 줄과 그래프가 서로 다른 숫자를 말했다. 지금 값까지 잇는다.
+  const decayed = played.length && played[played.length - 1] !== v.rating
+    ? played[played.length - 1] - v.rating : 0;
+  const pts = decayed ? [...played, v.rating] : played;
   const multi = vars.length > 1 || vk;
   const head = `<div class="var-head">레이팅 추이${multi ? ` · ${variantLabelOf(game, vk) || '기본'}` : ''}</div>`;
   // 빈 상태: 왜 비었는지와 언제 채워지는지를 말한다
@@ -1475,7 +1513,7 @@ function trendChart(game, d) {
       <i class="trend-dot" style="top:${(y(last) / H * 100).toFixed(1)}%;background:${lastTier.color}"></i>
     </div>
     <div class="trend-sum">
-      <span>최근 ${pts.length}판</span>
+      <span>최근 ${played.length}판${decayed > 0 ? ` · 쉬는 동안 −${nf(decayed)}` : ''}</span>
       <span>${nf(first)} → <b style="color:${lastTier.color}">${nf(last)}</b>
         <i class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${nf(Math.abs(diff))}</i></span>
     </div>
@@ -1731,6 +1769,8 @@ $('#btn-import-apply').addEventListener('click', () => {
   saveState(pendingImport);
   state = loadState();      // 누락 필드를 채워 다시 읽는다
   applyTheme(state.theme);
+  // 파일의 소리·진동 설정을 실제 소리에도 바로 반영한다 (안 하면 스위치와 실제가 어긋난다)
+  setAudio({ sound: state.sound, haptic: state.haptic });
   pendingImport = null;
   $('#import-confirm').classList.add('hidden');
   renderSettings();
@@ -1747,10 +1787,12 @@ $('#btn-reset').addEventListener('click', () => {
 $('#btn-reset-cancel').addEventListener('click', () => $('#reset-confirm').classList.add('hidden'));
 
 $('#btn-reset-apply').addEventListener('click', async () => {
-  const keepTheme = state.theme;
+  const keep = { theme: state.theme, sound: state.sound, haptic: state.haptic };
   await clearState();
   state = loadState();
-  state.theme = keepTheme;   // 화면 설정까지 초기화할 이유는 없다
+  // 화면·소리 설정까지 초기화할 이유는 없다. 예전에는 소리 값만 "켬"으로 돌아가고
+  // 실제 소리는 꺼진 채라, 스위치와 실제가 어긋났다.
+  Object.assign(state, keep);
   saveState(state);
   $('#reset-confirm').classList.add('hidden');
   renderSettings();
@@ -1775,6 +1817,7 @@ function handleBack() {
   const active = document.querySelector('.screen.active');
   const id = active && active.id;
   if (id === 'screen-game') { abortGame(); return true; }      // 게임 중 → 홈
+  if (id === 'screen-rules') { leaveRules(); return true; }    // 방법 → 온 곳으로
   if (id && id !== 'screen-home') { renderHome(); return true; } // 다른 화면 → 홈
   // 홈: 두 번 눌러 나가기
   const now = Date.now();
