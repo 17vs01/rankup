@@ -1,5 +1,5 @@
 // 오프라인 캐시 서비스워커
-const CACHE = 'rankup-v45';   // 배포마다 올린다 — 안 올리면 캐시된 옛 화면이 계속 뜬다
+const CACHE = 'rankup-v46';   // 배포마다 올린다 — 안 올리면 캐시된 옛 화면이 계속 뜬다
 const ASSETS = [
   '.',
   'index.html',

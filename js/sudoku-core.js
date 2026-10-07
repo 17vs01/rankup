@@ -108,7 +108,21 @@ export function fullGrid(spec, rng = Math.random) {
 
 // 유일해를 유지하면서 단서를 targetClues까지 걷어낸다.
 // 대칭 제거는 하지 않는다 — 낮은 단서 수를 실제로 달성하는 쪽이 난이도에 정직하다.
+//
+// 한 번에 목표까지 못 내려가는 판이 있다 (극한 25개는 일곱 판에 한 판꼴로 26~27개에서 멈춘다).
+// 목록에는 "단서 25개"라고 적혀 있으니 몇 번 더 뽑아 맞춘다. 끝내 안 되면 가장 적었던 판을 쓴다.
+// 첫 시도에 되면 예전과 똑같은 판이 나온다 — 오늘의 스도쿠(36개)는 그대로다.
 export function generate(spec, targetClues, rng = Math.random) {
+  let best = null;
+  for (let t = 0; t < 12; t++) {
+    const g = generateOnce(spec, targetClues, rng);
+    if (!best || g.clues < best.clues) best = g;
+    if (best.clues <= targetClues) break;
+  }
+  return best;
+}
+
+function generateOnce(spec, targetClues, rng) {
   const { n } = spec;
   const solution = fullGrid(spec, rng);
   const puzzle = Int8Array.from(solution);

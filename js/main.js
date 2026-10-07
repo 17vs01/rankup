@@ -281,7 +281,7 @@ function renderHome() {
   const $list = $('#list');
   $list.innerHTML = '';
   for (const group of GROUPS) {
-    // 비슷한 능력끼리 묶어서 보여준다. 13줄이 한 덩어리면 고르기 어렵다.
+    // 비슷한 능력끼리 묶어서 보여준다. 열댓 줄이 한 덩어리면 고르기 어렵다.
     const head = document.createElement('div');
     head.className = 'list-group';
     head.textContent = group.name;
@@ -336,7 +336,7 @@ function renderHome() {
   const sp = state.sudokuProg;
   const saved = sudokuSaved();
   $('#sudoku-sub').textContent = saved
-    ? `이어하기 · ${saved.level} · ${fmtDur(Math.round(saved.elapsed || 0), 'sec')} 경과`
+    ? `이어하기 · ${saved.level} · ${fmtElapsed(saved.elapsed)} 경과`
     : sp.plays === 0
       ? '9×9 클래식 · 쉬움부터 하나씩 열어가세요'
       : `${sp.unlocked}/${SUDOKU_LEVELS.length}단계 열림 · ${nf(sp.plays)}판`;
@@ -348,7 +348,7 @@ function renderHome() {
 }
 
 // ---------- 오늘의 훈련 ----------
-// 매일 3종목을 골라준다. 목록 11개 앞에서 "뭘 하지"를 고민하지 않게 하는 게 목적.
+// 매일 3종목을 골라준다. 긴 목록 앞에서 "뭘 하지"를 고민하지 않게 하는 게 목적.
 // 고르는 기준: ① 이미 LP가 줄고 있거나 곧 줄 종목 ② 아직 안 해본 종목
 // ③ 평균보다 뒤처진 종목. 날짜가 바뀌면 다시 뽑는다.
 const DAILY_N = 3;
@@ -1133,6 +1133,12 @@ function eul(word) {
   return word + (hasBatchim ? '을' : '를');
 }
 
+// 흐른 시간은 초 단위로만 센다. 기록용 fmtDur는 10초 미만을 "4.0초"로 적어서 어색했다.
+function fmtElapsed(sec) {
+  const s = Math.max(0, Math.round(sec || 0));
+  return s < 60 ? `${s}초` : fmtDur(s, 'sec');
+}
+
 function sudokuSaved() {
   const s = state.sudoku;
   return (s && s.grid && !s.done && s.level) ? s : null;
@@ -1150,12 +1156,11 @@ function renderSudoku() {
   // 이어하기 — 진행 중인 판이 있으면 가장 위에서 권한다
   const $cont = $('#sd-continue');
   if (saved) {
-    const el = Math.round(saved.elapsed || 0);
     const label = saved.day
       ? (saved.day === dayKeyOf() ? '오늘의 스도쿠' : `${saved.day.split('-').slice(1).join('/')} 스도쿠`)
       : saved.level;
     $('#sd-continue-desc').textContent =
-      `${label} · ${fmtDur(el, 'sec')} 경과 · 실수 ${saved.mistakes || 0}`;
+      `${label} · ${fmtElapsed(saved.elapsed)} 경과 · 실수 ${saved.mistakes || 0}`;
     $cont.classList.remove('hidden');
     $cont.onclick = () => startSudoku(saved.level, saved.day || null);
   } else {
@@ -1814,6 +1819,9 @@ $('#btn-leaderboard').addEventListener('click', async () => {
 
 let lastBackAt = 0;
 function handleBack() {
+  // 축하 화면은 모든 화면 위에 덮인다. 그대로 두고 홈으로 가면 홈이 몇 초 가려진다.
+  const $cel = $('#celebrate');
+  if (!$cel.classList.contains('hidden')) { $cel.classList.add('hidden'); return true; }
   const active = document.querySelector('.screen.active');
   const id = active && active.id;
   if (id === 'screen-game') { abortGame(); return true; }      // 게임 중 → 홈
@@ -1828,7 +1836,7 @@ function handleBack() {
 }
 
 // ---------- 첫 실행 안내 ----------
-// 처음 온 사람에게 목록 11개를 던지면 고르다 지친다. 무엇을 하는 앱인지 세 줄로 알리고
+// 처음 온 사람에게 종목 목록을 통째로 던지면 고르다 지친다. 무엇을 하는 앱인지 세 줄로 알리고
 // 오늘의 훈련 첫 판으로 바로 태운다.
 function showIntro() {
   const plan = todayPlan();

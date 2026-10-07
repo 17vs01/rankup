@@ -58,14 +58,21 @@ export function pendingDecay(disc, now = Date.now()) {
   const days = (now - from) / (24 * 3600 * 1000);
   if (days <= 0) return 0;
   const raw = Math.floor(days * DECAY_PER_DAY);
+  return Math.min(raw, decayRoom(disc));
+}
+
+// 부식으로 더 줄 수 있는 폭. 최고점 −250(또는 850)에 닿았으면 0이다.
+function decayRoom(disc) {
   const floor = Math.max(START_RATING - 150, (disc.peak || disc.rating) - DECAY_FLOOR_GAP);
-  const maxLoss = Math.max(0, disc.rating - floor);
-  return Math.min(raw, maxLoss);
+  return Math.max(0, disc.rating - floor);
 }
 
 // 부식까지 남은 시간(ms). 이미 부식 중이면 0
 export function timeToDecay(disc, now = Date.now()) {
   if (!disc.lastPlayed) return Infinity;
   if ((disc.sessions || 0) < DECAY_MIN_SESSIONS) return Infinity;
+  // 바닥에 닿은 조합은 더 줄지 않는다. 예전에는 여기서 0을 돌려줘서, 실제로는 멈췄는데도
+  // 홈에 "지금 LP가 줄고 있어요"가 다시 할 때까지 영영 떠 있었다.
+  if (decayRoom(disc) <= 0) return Infinity;
   return Math.max(0, disc.lastPlayed + DECAY_GRACE_H * 3600 * 1000 - now);
 }
